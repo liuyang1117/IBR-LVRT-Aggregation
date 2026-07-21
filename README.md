@@ -33,8 +33,8 @@ Both cases build a detailed multi-unit model, construct an aggregated equivalent
 - Aggregated equivalent network model  
   聚合等值网络模型
 
-- Trip/blocking logic under LVRT  
-  低电压穿越过程中的脱网/封波逻辑
+- Trip logic under LVRT  
+  低电压穿越过程中的脱网逻辑
 
 - Common-voltage intermediate model  
   公共电压中间模型
