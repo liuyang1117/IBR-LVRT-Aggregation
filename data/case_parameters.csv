@@ -1,3 +1,3 @@
 case,main_file,Sbase_MVA,Vbase_kV,Vctrl_base_kV,unit_count,capacity_MW,ctrlType,priority,notes
-Photovoltaic case,photovoltaic_case.m,100,10.5,10.0,6,[2;4;2;4;2;2],[1;2;1;2;1;1],equal,Six-PV LVRT aggregation and error decomposition case
+Photovoltaic case,photovoltaic_case.m,100,10.5,10.0,6,[2;4;2;4;2;2],[1;2;1;2;1;1],q_first,Six-PV LVRT aggregation and error decomposition case
 Wind farm case,wind_farm_case.m,100,66.0,66.0,12,[2;4;2;4;2;2;2;4;2;4;2;2],[1;2;1;2;1;1;1;2;1;2;1;1],q_first,Twelve-turbine LVRT aggregation and error decomposition case
