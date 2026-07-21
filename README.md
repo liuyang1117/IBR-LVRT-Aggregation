@@ -47,8 +47,7 @@ Both cases build a detailed multi-unit model, construct an aggregated equivalent
 
 - Branch-adaptive approximation  
   分支自适应近似：
-  - `e_vd`: Eq. (50) for consistent branches, Eq. (53) for inconsistent branches
-  - `e_fs`: Eq. (60) for consistent branches, Eq. (63) for inconsistent branches
+
 
 - Propagation-operator and condition-number analysis  
   传播算子范数和条件数分析
@@ -140,7 +139,7 @@ run_all_cases;
 
 | Case | Voltage base | Unit count | Capacity vector | Priority |
 |---|---:|---:|---|---|
-| Photovoltaic case | 10.5 kV | 6 | `[2;4;2;4;2;2]` MW | equal |
+| Photovoltaic case | 10.5 kV | 6 | `[2;4;2;4;2;2]` MW | q_first |
 | Wind farm case | 66 kV | 12 | `[2;4;2;4;2;2;2;4;2;4;2;2]` MW | q_first |
 
 The parameter summary is also available in:
