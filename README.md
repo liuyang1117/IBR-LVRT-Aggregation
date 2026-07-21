@@ -181,3 +181,12 @@ If this repository supports your research, please cite the associated paper or t
 This repository is released under the MIT License.
 
 本仓库采用 MIT License 开源协议。
+
+## Model Address / 模型地址
+
+The complete CloudPSS models are available in this repository:
+
+完整的 CloudPSS 模型代码可在本仓库中获取：
+
+```text
+https://github.com/liuyang1117/IBR-LVRT-Aggregation
