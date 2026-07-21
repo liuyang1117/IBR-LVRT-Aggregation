@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+title: "IBR-LVRT-Aggregation-Cases"
+message: "If you use this code, please cite this repository or the associated paper."
+type: software
+authors:
+  - family-names: "Author"
+    given-names: "Your Name"
+repository-code: "https://github.com/your-organization/IBR-LVRT-Aggregation-Cases"
+license: MIT
+keywords:
+  - inverter-based resources
+  - low-voltage ride-through
+  - aggregation
+  - photovoltaic
+  - wind farm
+  - MATLAB
