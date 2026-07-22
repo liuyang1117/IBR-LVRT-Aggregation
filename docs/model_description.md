@@ -76,7 +76,7 @@ is the function-structure error.
 
 The scripts use branch-adaptive formulas:
 
-- consistent branches: Eq. (50) for `e_vd`, Eq. (60) for `e_fs`
-- inconsistent branches: Eq. (53) for `e_vd`, Eq. (63) for `e_fs`
+- consistent branches
+- inconsistent branches
 
 程序根据公共电压分支与真实分支是否一致，自动选择对应的近似公式。
