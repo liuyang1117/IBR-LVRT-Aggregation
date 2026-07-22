@@ -189,4 +189,8 @@ The complete CloudPSS models are available in this repository:
 完整的 CloudPSS 模型代码可在本仓库中获取：
 
 ```text
-https://github.com/liuyang1117/IBR-LVRT-Aggregation
+https://cloudpss.net/model/liuyang/CaseI-a
+https://cloudpss.net/model/liuyang/CaseI-b
+https://cloudpss.net/model/liuyang/CaseII
+https://cloudpss.net/model/liuyang/CaseIII
+https://cloudpss.net/model/liuyang/CaseIV
