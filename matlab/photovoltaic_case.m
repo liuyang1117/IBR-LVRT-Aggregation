@@ -5,6 +5,7 @@ clc;
 close all;
 
 %% ============================================================
+% 0. Per-unit base-value settings
 %  0. 标幺基准值设置
 % ============================================================
 
@@ -17,15 +18,23 @@ Ilimit_base_ratio = Vbase_kV / Vctrl_base_kV;
 Ibase_kA = Sbase_MVA / (sqrt(3) * Vbase_kV);
 Ibase_A  = Ibase_kA * 1000;
 
+% ================ Per-unit base values ================
 disp('================ 标幺基准值 ================');
+% System capacity base Sbase = %.4f MVA\n
 fprintf('系统容量基准 Sbase = %.4f MVA\n', Sbase_MVA);
+% Network voltage base Vbase = %.4f kV\n
 fprintf('网络电压基准 Vbase = %.4f kV\n', Vbase_kV);
+% Controller voltage base Vctrl_base = %.4f kV\n
 fprintf('控制电压基准 Vctrl_base = %.4f kV\n', Vctrl_base_kV);
+% Current-limit base conversion factor Ilimit_base_ratio = %.6f\n
 fprintf('电流限幅换算系数 Ilimit_base_ratio = %.6f\n', Ilimit_base_ratio);
+% Base current Ibase = %.6f kA\n
 fprintf('基准电流 Ibase = %.6f kA\n', Ibase_kA);
+% Base current Ibase = %.2f A\n
 fprintf('基准电流 Ibase = %.2f A\n', Ibase_A);
 
 %% ============================================================
+% 1. Construct the system admittance matrix Y
 %  1. 构造系统导纳矩阵 Y
 % ============================================================
 
@@ -37,52 +46,69 @@ nPV = nTotal - 2;
 nInternal = nTotal - 1;
 
 %% ============================================================
+% 2. PV capacity settings
 %  2. 光伏容量设置
 % ============================================================
 
 s = [2;4;2;4;2;2];
 
 if length(s) ~= nPV
+    % The length of capacity vector s must equal the number of PV nodes.
     error('容量向量 s 的长度必须等于光伏节点数。');
 end
 
 Ssum = sum(s);
 s_aug = [0; s];
 
+% ================ PV capacity ================
 disp('================ 光伏容量 ================');
+% PV capacity vector s = [
 fprintf('光伏容量向量 s = [');
 fprintf(' %.4f', s);
 fprintf(' ] MW\n');
+% Augmented capacity vector s_aug = [
 fprintf('扩展容量向量 s_aug = [');
 fprintf(' %.4f', s_aug);
 fprintf(' ] MW\n');
+% Total PV capacity Ssum = %.4f MW\n
 fprintf('光伏总容量 Ssum = %.4f MW\n', Ssum);
+% Total PV capacity / system capacity base = %.6f p.u.\n
 fprintf('光伏总容量 / 系统容量基准 = %.6f p.u.\n', Ssum / Sbase_MVA);
 
 %% ============================================================
+% 3. PV control-type settings
 %  3. 光伏控制类型设置
 % ============================================================
+% type = 1: constant-power active-current control
 % type = 1：恒功率型有功电流控制
+% type = 2: constant-current active-current control
 % type = 2：恒电流型有功电流控制
 
-ctrlType = [1;2;1;2;1;1];
+ctrlType = [1;1;1;2;2;2];
 
 if length(ctrlType) ~= nPV
+    % The length of ctrlType must equal the number of PV nodes.
     error('ctrlType 的长度必须等于光伏节点数。');
 end
 
 %% ============================================================
+% 4. Admittance-matrix partitioning
 %  4. 导纳矩阵分块
 % ============================================================
+% Original network equation:
 % 原始网络方程：
 %
 %   [Ip]   [Ypp  YpI] [Vp]
 %   [II] = [YIp  YII] [U ]
 %
+% where:
 % 其中：
+% Vp is the PCC voltage;
 %   Vp 为并网点电压；
 %   U = [V1; V2; ...; V7]；
+% V1 is the passive intermediate node;
 %   V1 为无源中间节点；
+% V2 to V7 are PV terminal voltages.
 %   V2~V7 为光伏端电压。
 
 Ypp = Y(1,1);
@@ -91,10 +117,12 @@ YIp = Y(2:end,1);
 YII = Y(2:end,2:end);
 
 if length(s_aug) ~= nInternal
+    % The length of s_aug must equal the number of internal nodes.
     error('s_aug 的长度必须等于内部节点数量。');
 end
 
 %% ============================================================
+% 5. Construct the equivalent admittance matrix Yeq
 %  5. 构造等值导纳矩阵 Yeq
 % ============================================================
 
@@ -116,6 +144,7 @@ Yeq_pI = Yeq(1,2);
 Yeq_Ip = Yeq(2,1);
 Yeq_II = Yeq(2,2);
 
+% ================ Equivalent network parameters ================
 disp('================ 等值网络参数 ================');
 disp('Yred = ');
 disp(Yred);
@@ -131,6 +160,7 @@ disp('Yeq = ');
 disp(Yeq);
 
 %% ============================================================
+% 6. Detailed-model PV control parameters
 %  6. 详细模型光伏控制参数
 % ============================================================
 
@@ -146,9 +176,16 @@ pv.Id0_single = 0.5;
 pv.Iq0_single = 0.0;
 
 pv.Imax_single = 1.0;
-pv.Imax_single_vec = ones(nPV,1);
+pv.Imax_single_vec = zeros(nPV,1);
+
+% type = 1：恒功率型，限幅 1.1
+pv.Imax_single_vec(ctrlType == 1) = 1.0;
+
+% type = 2：恒电流型，限幅 1.0
+pv.Imax_single_vec(ctrlType == 2) = 1.1;
 
 if length(pv.Imax_single_vec) ~= nPV
+    % The length of Imax_single_vec must equal the number of PV nodes.
     error('Imax_single_vec 的长度必须等于光伏节点数。');
 end
 
@@ -167,13 +204,18 @@ pv.constI.vblock = 0.19;
 
 pv.gateWidth = 0;
 
+% Current-limiting priority:
 % 电流限幅方式：
+% equal   : proportional current limiting;
 % equal   ：等比例限幅；
+% q_first : reactive-current priority;
 % q_first ：无功优先；
+% p_first : active-current priority.
 % p_first ：有功优先。
-pv.priority = 'equal';
+pv.priority = 'q_first';
 
 %% ============================================================
+% 7. Detailed-model tripping-iteration parameters
 %  7. 详细模型脱网迭代参数
 % ============================================================
 
@@ -184,6 +226,7 @@ maxTripIter = nPV + 5;
 tripTol = 1e-10;
 
 %% ============================================================
+% 8. Equivalent PV parameters
 %  8. 等值光伏参数
 % ============================================================
 
@@ -198,6 +241,7 @@ Aeq = SP / Seq;
 Beq = SI / Seq;
 
 if abs(Aeq + Beq - 1) > 1e-10
+    % Aeq + Beq is not equal to 1.
     error('Aeq + Beq 不等于 1。');
 end
 
@@ -231,25 +275,40 @@ pv_eq.gateWidth = pv.gateWidth;
 pv_eq.priority  = pv.priority;
 
 if ~(pv_eq.vblock < pv_eq.vtrip && pv_eq.vtrip < pv_eq.vL)
+    % The equivalent PV thresholds are invalid and should satisfy vblock < vtrip < vL.
     error('等值光伏阈值设置错误，应满足 vblock < vtrip < vL。');
 end
 
+% \n================ Equivalent PV parameters ================\n
 fprintf('\n================ 等值光伏参数 ================\n');
+% Constant-power PV capacity SP = %.6f MW\n
 fprintf('恒功率光伏容量 SP = %.6f MW\n', SP);
+% Constant-current PV capacity SI = %.6f MW\n
 fprintf('恒电流光伏容量 SI = %.6f MW\n', SI);
+% Equivalent PV capacity Seq = %.6f MW\n
 fprintf('等值光伏容量 Seq = %.6f MW\n', Seq);
+% Constant-power capacity ratio Aeq = %.6f\n
 fprintf('恒功率容量占比 Aeq = %.6f\n', Aeq);
+% Constant-current capacity ratio Beq = %.6f\n
 fprintf('恒电流容量占比 Beq = %.6f\n', Beq);
 fprintf('Aeq + Beq = %.6f\n', Aeq + Beq);
+% Initial active current of the equivalent PV model Id_eq_single = %.6f p.u.\n
 fprintf('等值光伏初始有功电流 Id_eq_single = %.6f p.u.\n', pv_eq.Id0_single);
+% Initial reactive current of the equivalent PV model Iq_eq_single = %.6f p.u.\n
 fprintf('等值光伏初始无功电流 Iq_eq_single = %.6f p.u.\n', pv_eq.Iq0_single);
+% Current limit of the equivalent PV model Imax_eq_single = %.6f p.u.\n
 fprintf('等值光伏限幅值 Imax_eq_single = %.6f p.u.\n', pv_eq.Imax_single);
+% Current-limit conversion factor of the equivalent PV model = %.6f\n
 fprintf('等值光伏限幅换算系数 = %.6f\n', pv_eq.Ilimit_base_ratio);
+% Pre-fault voltage of the equivalent PV model vpre_eq = %.6f p.u.\n
 fprintf('等值光伏预故障电压 vpre_eq = %.6f p.u.\n', pv_eq.vpre);
+% Trip threshold of the equivalent PV model vtrip_eq = %.6f p.u.\n
 fprintf('等值光伏脱网阈值 vtrip_eq = %.6f p.u.\n', pv_eq.vtrip);
+% Blocking threshold of the equivalent PV model vblock_eq = %.6f p.u.\n
 fprintf('等值光伏封波阈值 vblock_eq = %.6f p.u.\n', pv_eq.vblock);
 
 %% ============================================================
+% 9. Sweep the PCC voltage
 %  9. 扫描并网点电压
 % ============================================================
 
@@ -275,14 +334,19 @@ tripIter_store = zeros(size(Vp_abs_vec));
 tripEq_store = false(size(Vp_abs_vec));
 
 %% ============================================================
+% 9.1 Common-voltage intermediate model and branch-mismatch analysis variables
 %  9.1 公共电压中间模型和分支不一致分析变量
 % ============================================================
+% The common-voltage model is used for error decomposition:
 % 公共电压模型用于误差分解：
 %
 %   H - Heq = evd + efs
 %
+% where:
 % 其中：
+% evd = H - Hc, denotes the voltage-dispersion error;
 %   evd = H - Hc，表示电压分散误差；
+% efs = Hc - Heq, denotes the function-structure error.
 %   efs = Hc - Heq，表示函数结构误差。
 
 Vc_vec = zeros(size(Vp_abs_vec));
@@ -298,16 +362,19 @@ rI_norm_vec = zeros(size(Vp_abs_vec));
 
 tripC_store = false(nPV, length(Vp_abs_vec));
 
-% 新增：式（50）一致分支电压分散误差近似
+% Consistent-branch approximation of the voltage-dispersion error
+% 一致分支电压分散误差近似
 % evd_50 = bcv + YpI * inv(M_I^alpha) * rI_alpha
 evd_consistent_approx_vec = zeros(size(Vp_abs_vec));
 
-% 原有：式（53）不一致分支电压分散误差近似
+% Inconsistent-branch approximation of the voltage-dispersion error
+% 不一致分支电压分散误差近似
 % evd_53 = bcv + YpI * inv(M_I^alphaStar) * (rI_alpha + mI)
 evd_branch_approx_vec = zeros(size(Vp_abs_vec));
 
+% Branch-adaptive approximation of the voltage-dispersion error:
 % 分支自适应电压分散误差近似：
-% 同一分支用式(50)，不同分支用式(53)
+
 evd_piecewise_approx_vec = zeros(size(Vp_abs_vec));
 
 mI_norm_vec = zeros(size(Vp_abs_vec));
@@ -315,17 +382,22 @@ rI_alpha_norm_vec = zeros(size(Vp_abs_vec));
 branchMismatchCount_vec = zeros(size(Vp_abs_vec));
 condM_vec = zeros(size(Vp_abs_vec));
 
-% 新增：分别保存 M_I^alpha 和 M_I^alphaStar 的条件数
+% Condition numbers of M_I^alpha and M_I^alphaStar
+% M_I^alpha 和 M_I^alphaStar 的条件数
 % M_I^alpha     = YII - Jf_alpha(1Vc)
 % M_I^alphaStar = YII - Jf_alphaStar(1Vc)
 condMIAlpha_vec = zeros(size(Vp_abs_vec));
 condMIAlphaStar_vec = zeros(size(Vp_abs_vec));
 
+% Condition number of M_I after branch-adaptive selection:
 % 分支自适应选择后的 M_I 条件数：
+% Use M_I^alpha for the same branch and M_I^alphaStar for different branches
 % 同一分支用 M_I^alpha，不同分支用 M_I^alphaStar
 condMI_piecewise_vec = zeros(size(Vp_abs_vec));
 
+% Original-side propagation operator: K_vd = YpI * M_I^(-1)
 % 原始侧传播算子：K_vd = YpI * M_I^(-1)
+% K_vd is a real two-axis matrix; its matrix 2-norm is used for plotting.
 % K_vd 为实数二轴矩阵，绘图采用矩阵二范数。
 KvdAlphaNorm_vec = zeros(size(Vp_abs_vec));
 KvdAlphaStarNorm_vec = zeros(size(Vp_abs_vec));
@@ -336,39 +408,48 @@ branchCommon_store = zeros(nPV, length(Vp_abs_vec));
 branchTrue_store   = zeros(nPV, length(Vp_abs_vec));
 
 %% ============================================================
+% 9.2 Function-structure error approximation variables
 %  9.2 函数结构误差近似变量
 % ============================================================
+% Function-structure error:
 % 函数结构误差：
 %
 %   efs = Hc - Heq
 
-% 新增：式（60）一致分支函数结构误差近似
+% Consistent-branch approximation of the function-structure error
+% 一致分支函数结构误差近似
 % efs_60 = -Yeq_pI * inv(M_e^beta) * delta_ab
 efs_consistent_approx_vec = zeros(size(Vp_abs_vec));
 
-% 原有：式（63）不一致分支函数结构误差近似
+% Inconsistent-branch approximation of the function-structure error
+% 不一致分支函数结构误差近似
 % efs_63 = -Yeq_pI * inv(M_e^betaStar) * (delta_ab + me)
 efs_func_approx_vec = zeros(size(Vp_abs_vec));
 
+% Branch-adaptive approximation of the function-structure error:
 % 分支自适应函数结构误差近似：
-% 同一分支用式(60)，不同分支用式(63)
 efs_piecewise_approx_vec = zeros(size(Vp_abs_vec));
 
 delta_ab_norm_vec = zeros(size(Vp_abs_vec));
 me_norm_vec = zeros(size(Vp_abs_vec));
 condMe_vec = zeros(size(Vp_abs_vec));
 
+% New: separately store the condition numbers of M_e^beta and M_e^betaStar
 % 新增：分别保存 M_e^beta 和 M_e^betaStar 的条件数
 % M_e^beta     = Yeq_ee - JF_beta(Vc)
 % M_e^betaStar = Yeq_ee - JF_betaStar(Vc)
 condMeBeta_vec = zeros(size(Vp_abs_vec));
 condMeBetaStar_vec = zeros(size(Vp_abs_vec));
 
+% Condition number of M_e after branch-adaptive selection:
 % 分支自适应选择后的 M_e 条件数：
+% Use M_e^beta for the same branch and M_e^betaStar for different branches
 % 同一分支用 M_e^beta，不同分支用 M_e^betaStar
 condMe_piecewise_vec = zeros(size(Vp_abs_vec));
 
+% Equivalent-side propagation operator: K_fs = -Yeq_pI * M_e^(-1)
 % 等值侧传播算子：K_fs = -Yeq_pI * M_e^(-1)
+% K_fs is a real two-axis matrix; its matrix 2-norm is used for plotting.
 % K_fs 为实数二轴矩阵，绘图采用矩阵二范数。
 KfsBetaNorm_vec = zeros(size(Vp_abs_vec));
 KfsBetaStarNorm_vec = zeros(size(Vp_abs_vec));
@@ -381,10 +462,12 @@ branchBeta_vec = zeros(size(Vp_abs_vec));
 branchBetaStar_vec = zeros(size(Vp_abs_vec));
 
 %% ============================================================
+% 10. fsolve solver settings
 %  10. fsolve 求解器设置
 % ============================================================
 
 if exist('fsolve','file') ~= 2
+    % fsolve from Optimization Toolbox is required.
     error('需要 Optimization Toolbox 中的 fsolve。');
 end
 
@@ -405,6 +488,7 @@ Vc0 = 1 + 0j;
 x0_c = [real(Vc0); imag(Vc0)];
 
 %% ============================================================
+% 11. Solve the detailed model, equivalent model, and common-voltage model
 %  11. 求解详细模型、等值模型和公共电压模型
 % ============================================================
 
@@ -412,6 +496,7 @@ for k = 1:length(Vp_abs_vec)
 
     Vp = Vp_abs_vec(k) * exp(1j*theta_p);
 
+    %% ================= Detailed-model solution =================
     %% ================= 详细模型求解 =================
 
     if tripLatchAcrossVp
@@ -436,6 +521,7 @@ for k = 1:length(Vp_abs_vec)
         [x_sol, ~, exitflag] = fsolve(fun, x0, opt);
 
         if exitflag <= 0
+            % English note: detailed model: Vp = %.4f, tripped迭代 %d 时 fsolve may not have converged.
             warning('详细模型：Vp = %.4f，脱网迭代 %d 时 fsolve 可能未收敛。', ...
                 Vp_abs_vec(k), tripIter);
         end
@@ -470,6 +556,7 @@ for k = 1:length(Vp_abs_vec)
     end
 
     if tripIter >= maxTripIter
+        % detailed model: Vp = %.4f reached the maximum number of tripping iterations.
         warning('详细模型：Vp = %.4f 达到最大脱网迭代次数。', Vp_abs_vec(k));
     end
 
@@ -495,6 +582,7 @@ for k = 1:length(Vp_abs_vec)
 
     x0 = x_sol;
 
+    %% ================= Equivalent-model solution =================
     %% ================= 等值模型求解 =================
 
     [VIeq, I_PVeq, tripEq, x_eq, exitflag_eq] = ...
@@ -509,6 +597,7 @@ for k = 1:length(Vp_abs_vec)
         );
 
     if exitflag_eq <= 0
+        % English note: equivalent model: Vp = %.4f 时may not have converged.
         warning('等值模型：Vp = %.4f 时可能未收敛。', Vp_abs_vec(k));
     end
 
@@ -527,13 +616,16 @@ for k = 1:length(Vp_abs_vec)
 
     x0_eq = x_eq;
 
+    %% ================= Common-voltage intermediate-model solution =================
     %% ================= 公共电压中间模型求解 =================
+    % Common-voltage model:
     % 公共电压模型：
     %
     %   Yeq_Ip*Vp + Yeq_II*Vc = G(Vc)
     %
     %   G(Vc) = sum_i f_i(Vc)
     %
+    % This assumes all PV terminal voltages are equal to Vc and then sums the current of each PV unit.
     % 即假设所有光伏端电压都等于 Vc，然后把每台光伏电流相加。
 
     [Vc, G_Vc, tripC, x_c, exitflag_c] = ...
@@ -548,6 +640,7 @@ for k = 1:length(Vp_abs_vec)
         );
 
     if exitflag_c <= 0
+        % English note: Common-voltage model: Vp = %.4f 时may not have converged.
         warning('公共电压模型：Vp = %.4f 时可能未收敛。', Vp_abs_vec(k));
     end
 
@@ -570,6 +663,7 @@ for k = 1:length(Vp_abs_vec)
         tripC ...
     );
 
+    %% ================= Approximation of voltage-dispersion error using Eq. (50)/(53) =================
     %% ================= 电压分散误差式（50）/（53）近似 =================
 
     [evd_consistent_approx, evd_branch_approx, mI_aug, rI_alpha_aug, condM, ...
@@ -590,6 +684,7 @@ for k = 1:length(Vp_abs_vec)
             pv ...
         );
 
+    %% ================= Approximation of function-structure error using Eq. (60)/(63) =================
     %% ================= 函数结构误差式（60）/（63）近似 =================
 
     [efs_consistent_approx, efs_func_approx, delta_ab, me_beta, condMe, ...
@@ -625,7 +720,8 @@ for k = 1:length(Vp_abs_vec)
     evd_consistent_approx_vec(k) = evd_consistent_approx;
     evd_branch_approx_vec(k) = evd_branch_approx;
 
-    % 分支自适应选择：同一分支用式(50)，不同分支用式(53)
+    % Branch-adaptive selection
+    % 分支自适应选择
     if branchMismatchCount == 0
         evd_piecewise_approx_vec(k) = evd_consistent_approx;
     else
@@ -639,8 +735,11 @@ for k = 1:length(Vp_abs_vec)
     condMIAlpha_vec(k) = condMIAlpha;
     condMIAlphaStar_vec(k) = condMIAlphaStar;
 
+    % M_I condition numberBranch-adaptive selection:
     % M_I 条件数分支自适应选择：
+    % branchMismatchCount = 0 use M_I^alpha
     % branchMismatchCount = 0 时使用 M_I^alpha
+    % branchMismatchCount > 0 use M_I^alphaStar
     % branchMismatchCount > 0 时使用 M_I^alphaStar
     if branchMismatchCount == 0
         condMI_piecewise_vec(k) = condMIAlpha;
@@ -648,6 +747,7 @@ for k = 1:length(Vp_abs_vec)
         condMI_piecewise_vec(k) = condMIAlphaStar;
     end
 
+    % fused YpI(M_I^alpha)^(-1) and YpI(M_I^alphaStar)^(-1)
     % 融合 YpI(M_I^alpha)^(-1) 与 YpI(M_I^alphaStar)^(-1)
     KvdAlphaNorm_vec(k) = norm(KvdAlpha_real, 2);
     KvdAlphaStarNorm_vec(k) = norm(KvdAlphaStar_real, 2);
@@ -666,7 +766,8 @@ for k = 1:length(Vp_abs_vec)
     efs_consistent_approx_vec(k) = efs_consistent_approx;
     efs_func_approx_vec(k) = efs_func_approx;
 
-    % 分支自适应选择：同一分支用式(60)，不同分支用式(63)
+    % Branch-adaptive selection
+    % 分支自适应选择
     if eqBranchMismatch == 0
         efs_piecewise_approx_vec(k) = efs_consistent_approx;
     else
@@ -679,8 +780,11 @@ for k = 1:length(Vp_abs_vec)
     condMeBeta_vec(k) = condMeBeta;
     condMeBetaStar_vec(k) = condMeBetaStar;
 
+    % M_e condition numberBranch-adaptive selection:
     % M_e 条件数分支自适应选择：
+    % eqBranchMismatch = 0 use M_e^beta
     % eqBranchMismatch = 0 时使用 M_e^beta
+    % eqBranchMismatch = 1 use M_e^betaStar
     % eqBranchMismatch = 1 时使用 M_e^betaStar
     if eqBranchMismatch == 0
         condMe_piecewise_vec(k) = condMeBeta;
@@ -688,6 +792,7 @@ for k = 1:length(Vp_abs_vec)
         condMe_piecewise_vec(k) = condMeBetaStar;
     end
 
+    % fused -Yeq_pI(M_e^beta)^(-1) and -Yeq_pI(M_e^betaStar)^(-1)
     % 融合 -Yeq_pI(M_e^beta)^(-1) 与 -Yeq_pI(M_e^betaStar)^(-1)
     KfsBetaNorm_vec(k) = norm(KfsBeta_real, 2);
     KfsBetaStarNorm_vec(k) = norm(KfsBetaStar_real, 2);
@@ -710,6 +815,7 @@ for k = 1:length(Vp_abs_vec)
 end
 
 %% ============================================================
+% 12. Sort by voltage in ascending order
 %  12. 按电压从小到大排序
 % ============================================================
 
@@ -764,6 +870,7 @@ KvdAlphaStarNorm_plot = KvdAlphaStarNorm_vec(idxPlot);
 Kvd_piecewiseNorm_plot = Kvd_piecewiseNorm_vec(idxPlot);
 Kvd_piecewise_real_plot = Kvd_piecewise_real_store(idxPlot);
 
+% Compatibility with the old variable name: use the condition number after actual branch-adaptive selection by default
 % 兼容旧变量名：默认使用实际分支自适应选择后的条件数
 condM_plot = condMI_piecewise_plot;
 
@@ -785,6 +892,7 @@ KfsBetaStarNorm_plot = KfsBetaStarNorm_vec(idxPlot);
 Kfs_piecewiseNorm_plot = Kfs_piecewiseNorm_vec(idxPlot);
 Kfs_piecewise_real_plot = Kfs_piecewise_real_store(idxPlot);
 
+% Compatibility with the old variable name: use the condition number after actual branch-adaptive selection by default
 % 兼容旧变量名：默认使用实际分支自适应选择后的条件数
 condMe_plot = condMe_piecewise_plot;
 
@@ -794,6 +902,7 @@ branchBeta_plot = branchBeta_vec(idxPlot);
 branchBetaStar_plot = branchBetaStar_vec(idxPlot);
 
 %% ============================================================
+% 13. Current conversion
 %  13. 电流换算
 % ============================================================
 
@@ -846,8 +955,11 @@ efs_consistent_approx_3ph_pu = sqrt(3) * abs(efs_consistent_approx_plot);
 efs_func_approx_3ph_pu = sqrt(3) * abs(efs_func_approx_plot);
 efs_piecewise_approx_3ph_pu = sqrt(3) * abs(efs_piecewise_approx_plot);
 
+% Branch-adaptive result of the total error: Result 1 + Result 2
 % 总误差分支自适应结果：结果1 + 结果2
+% Result 1 = evd_piecewise_approx, Result 2 = efs_piecewise_approx
 % 结果1 = evd_piecewise_approx，结果2 = efs_piecewise_approx
+% Note: first add in the complex domain, then take the magnitude.
 % 注意：这里先在复数域相加，再取模。
 etot_piecewise_approx_plot = evd_piecewise_approx_plot + efs_piecewise_approx_plot;
 etot_piecewise_approx_3ph_pu = sqrt(3) * abs(etot_piecewise_approx_plot);
@@ -860,47 +972,80 @@ Ip_3ph_pu_theory  = sqrt(3) * Ip_line_pu_theory;
 
 [~, idx1] = min(abs(Vp_plot - 1.0));
 
+% \n================ Steady-state current check ================\n
 fprintf('\n================ 稳态电流校验 ================\n');
+% Theoretical line-current per-unit value Iline_pu = 0.5*Ssum/Sbase = %.6f\n
 fprintf('理论线电流标幺值 Iline_pu = 0.5*Ssum/Sbase = %.6f\n', Ip_line_pu_theory);
+% Theoretical three-phase combined per-unit value I3ph_pu = sqrt(3)*Iline_pu = %.6f\n
 fprintf('理论三相合成标幺值 I3ph_pu = sqrt(3)*Iline_pu = %.6f\n', Ip_3ph_pu_theory);
+% Line-current per-unit value of detailed-model H at Vp=1 = %.6f\n
 fprintf('详细模型 H 在 Vp=1 时线电流标幺值 = %.6f\n', Ip_line_pu_from_actual(idx1));
+% Three-phase combined per-unit value of detailed-model H at Vp=1 = %.6f\n
 fprintf('详细模型 H 在 Vp=1 时三相合成标幺值 = %.6f\n', Ip_3ph_pu_from_actual(idx1));
+% Three-phase combined per-unit value of common-voltage model Hc at Vp=1 = %.6f\n
 fprintf('公共电压模型 Hc 在 Vp=1 时三相合成标幺值 = %.6f\n', Hc_3ph_pu(idx1));
+% Line-current per-unit value of equivalent-model Heq at Vp=1 = %.6f\n
 fprintf('等值模型 Heq 在 Vp=1 时线电流标幺值 = %.6f\n', Ipeq_line_pu_from_actual(idx1));
+% Three-phase combined per-unit value of equivalent-model Heq at Vp=1 = %.6f\n
 fprintf('等值模型 Heq 在 Vp=1 时三相合成标幺值 = %.6f\n', Ipeq_3ph_pu_from_actual(idx1));
+% Number of tripped units in the detailed model at Vp=1 = %d\n
 fprintf('详细模型 Vp=1 时脱网数量 = %d\n', tripCount_plot(idx1));
+% Number of tripped units in the common-voltage model at Vp=1 = %d\n
 fprintf('公共电压模型 Vp=1 时脱网数量 = %d\n', tripC_count_plot(idx1));
+% Tripping state of the equivalent model at Vp=1 = %d\n
 fprintf('等值模型 Vp=1 时脱网状态 = %d\n', tripEq_plot(idx1));
+% English note: Error-decomposition check |(evd+efs)-etot| 在 Vp=1 时 = %.4e\n
 fprintf('误差分解校验 |(evd+efs)-etot| 在 Vp=1 时 = %.4e\n', ...
     abs((evd_plot(idx1) + efs_plot(idx1)) - etot_plot(idx1)));
+% English note: Number of voltage-dispersion branch mismatches Vp=1 时 = %d\n
 fprintf('电压分散分支不一致数量 Vp=1 时 = %d\n', branchMismatchCount_plot(idx1));
+% English note: 式(50)approximation error |evd_50-evd| Vp=1 时 = %.4e\n
 fprintf('式(50)近似误差 |evd_50-evd| Vp=1 时 = %.4e\n', ...
     abs(evd_consistent_approx_plot(idx1) - evd_plot(idx1)));
+% English note: 式(53)approximation error |evd_53-evd| Vp=1 时 = %.4e\n
 fprintf('式(53)近似误差 |evd_53-evd| Vp=1 时 = %.4e\n', ...
     abs(evd_branch_approx_plot(idx1) - evd_plot(idx1)));
+% English note: Equivalent-branch mismatch flag Vp=1 时 = %d\n
 fprintf('等值分支不一致标志 Vp=1 时 = %d\n', eqBranchMismatch_plot(idx1));
+% English note: Function-structure residual |delta_alpha_beta| Vp=1 时 = %.4e\n
 fprintf('函数结构残差 |delta_alpha_beta| Vp=1 时 = %.4e\n', delta_ab_norm_plot(idx1));
+% English note: Equivalent-side branch-switching residual |me| Vp=1 时 = %.4e\n
 fprintf('等值分支切换残差 |me| Vp=1 时 = %.4e\n', me_norm_plot(idx1));
+% English note: 式(60)approximation error |efs_60-efs| Vp=1 时 = %.4e\n
 fprintf('式(60)近似误差 |efs_60-efs| Vp=1 时 = %.4e\n', ...
     abs(efs_consistent_approx_plot(idx1) - efs_plot(idx1)));
+% English note: 式(63)approximation error |efs_63-efs| Vp=1 时 = %.4e\n
 fprintf('式(63)近似误差 |efs_63-efs| Vp=1 时 = %.4e\n', ...
     abs(efs_func_approx_plot(idx1) - efs_plot(idx1)));
+% English note: cond(M_I^alpha) Vp=1 时 = %.4e\n
 fprintf('cond(M_I^alpha) Vp=1 时 = %.4e\n', condMIAlpha_plot(idx1));
+% English note: cond(M_I^alphaStar) Vp=1 时 = %.4e\n
 fprintf('cond(M_I^alphaStar) Vp=1 时 = %.4e\n', condMIAlphaStar_plot(idx1));
+% English note: cond(M_e^beta) Vp=1 时 = %.4e\n
 fprintf('cond(M_e^beta) Vp=1 时 = %.4e\n', condMeBeta_plot(idx1));
+% English note: cond(M_e^betaStar) Vp=1 时 = %.4e\n
 fprintf('cond(M_e^betaStar) Vp=1 时 = %.4e\n', condMeBetaStar_plot(idx1));
+% English note: branch自适应 |evd_piecewise-evd| Vp=1 时 = %.4e\n
 fprintf('分支自适应 |evd_piecewise-evd| Vp=1 时 = %.4e\n', ...
     abs(evd_piecewise_approx_plot(idx1) - evd_plot(idx1)));
+% English note: branch自适应 |efs_piecewise-efs| Vp=1 时 = %.4e\n
 fprintf('分支自适应 |efs_piecewise-efs| Vp=1 时 = %.4e\n', ...
     abs(efs_piecewise_approx_plot(idx1) - efs_plot(idx1)));
+% English note: cond(M_I_piecewise) Vp=1 时 = %.4e\n
 fprintf('cond(M_I_piecewise) Vp=1 时 = %.4e\n', condMI_piecewise_plot(idx1));
+% English note: cond(M_e_piecewise) Vp=1 时 = %.4e\n
 fprintf('cond(M_e_piecewise) Vp=1 时 = %.4e\n', condMe_piecewise_plot(idx1));
+% English note: Vp=1 时 |b_cv|_3ph = %.4e p.u.\n
 fprintf('Vp=1 时 |b_cv|_3ph = %.4e p.u.\n', bcv_3ph_pu(idx1));
+% English note: Vp=1 时 ||YpI M_I^(-1)||_2(fused) = %.4e\n
 fprintf('Vp=1 时 ||YpI M_I^(-1)||_2（融合） = %.4e\n', Kvd_piecewiseNorm_plot(idx1));
+% English note: Vp=1 时 ||-Ype^eq M_e^(-1)||_2(fused) = %.4e\n
 fprintf('Vp=1 时 ||-Ype^eq M_e^(-1)||_2（融合） = %.4e\n', Kfs_piecewiseNorm_plot(idx1));
+% Error-decomposition checkmaximum value = %.4e\n
 fprintf('误差分解校验最大值 = %.4e\n', max(error_decomp_check_3ph_pu));
 
 %% ============================================================
+% English note: 14. Vp = 1 时 of voltage information
 %  14. Vp = 1 时的电压信息
 % ============================================================
 
@@ -953,23 +1098,29 @@ T_eq = table( ...
     'VariableNames', {'Real_Veq', 'Imag_Veq', 'Abs_Veq', 'Angle_deg'} ...
 );
 
+% English note: \n================ Vp = 1 时 of voltage information ================\n
 fprintf('\n================ Vp = 1 时的电压信息 ================\n');
 fprintf('Vp = %.6f p.u.\n\n', Vp1);
 
+% Passive node of the detailed model V1: %.6f + j%.6f, abs = %.6f, angle = %.4f deg\n\n
 fprintf('详细模型无源节点 V1：%.6f + j%.6f, abs = %.6f, angle = %.4f deg\n\n', ...
     real(V1_detail_vp1), imag(V1_detail_vp1), ...
     V1_detail_abs_vp1, V1_detail_ang_vp1);
 
+% Voltages of all PV nodes in the detailed model:
 disp('详细模型各光伏节点电压：');
 disp(T_detail);
 
+% Common-voltage model Vc:
 disp('公共电压模型 Vc：');
 disp(T_common);
 
+% Equivalent-model voltage Ve:
 disp('等值模型电压 Ve：');
 disp(T_eq);
 
 %% ============================================================
+% 15. Plotting
 %  15. 画图
 % ============================================================
 
@@ -982,45 +1133,9 @@ titleFontSize  = 10;
 largeLegendFontSize = 14;
 emtTextFontSize = 12;
 
-% %% 15.1 并网点电流：详细模型、公共电压模型、等值模型
-% 
-% figure;
-% plot(Vp_pu_from_actual, Ip_3ph_pu_from_actual, 'LineWidth', 1.8);
-% hold on;
-% plot(Vp_pu_from_actual, Hc_3ph_pu, '--', 'LineWidth', 1.8);
-% plot(Vp_pu_from_actual, Ipeq_3ph_pu_from_actual, ':', 'LineWidth', 1.8);
-% grid on;
-% 
-% xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-%     'Interpreter', 'latex', ...
-%     'FontSize', labelFontSize);
-% 
-% ylabel('$\vert I_p\vert({\rm p.u.})$', ...
-%     'Interpreter', 'latex', ...
-%     'FontSize', labelFontSize);
-% 
-% lgd = legend( ...
-%     'Original cluster model', ...
-%     'Common-voltage model', ...
-%     'Aggregated equivalent model', ...
-%     'Location', 'northeast');
-% 
-% set(lgd, ...
-%     'FontName', fontName, ...
-%     'FontSize', legendFontSize);
-% 
-% set(gca, ...
-%     'FontName', fontName, ...
-%     'FontSize', axisFontSize, ...
-%     'LineWidth', 1.2);
-% 
-% set(gcf, ...
-%     'Color', 'w', ...
-%     'Name', '并网点电流模型对比', ...
-%     'NumberTitle', 'off');
-% 
 
-%% 15.2 聚合误差分解
+%% 15.1 Aggregation error decomposition
+%% 15.1 聚合误差分解
 
 figure;
 plot(Vp_pu_from_actual, etot_3ph_pu, 'LineWidth', 1.8);
@@ -1052,6 +1167,7 @@ set(gca, ...
     'FontName', fontName, ...
     'FontSize', axisFontSize, ...
     'LineWidth', 1.2);
+% Add the letter B in the lower-right corner inside the axes
 % 在坐标区内部右下角添加字母 B
 text(0.95, 0.05, 'B', ...
     'Units', 'normalized', ...
@@ -1067,620 +1183,178 @@ set(gcf, ...
     'NumberTitle', 'off');
 
 
-%% 15.3 电压分散误差与函数结构误差
+% ============================================================
+%  15.2 CaseIa-Comparison of PCC current among the detailed model, equivalent model, EMT, and EMTeq
+%  15.2 CaseIa-并网点电流详细模型、等值模型与 EMT/EMTeq 对比
+% ============================================================
+
 
 figure;
-plot(Vp_pu_from_actual, evd_3ph_pu, 'LineWidth', 1.8);
+
+h_detail = plot(Vp_pu_from_actual, Ip_3ph_pu_from_actual, ...
+    'LineWidth', 1.8, ...
+    'DisplayName', 'Original Cluster Model');
 hold on;
-plot(Vp_pu_from_actual, efs_3ph_pu, '--', 'LineWidth', 1.8);
+
+h_equiv = plot(Vp_pu_from_actual, Ipeq_3ph_pu_from_actual, ...
+    '--', ...
+    'LineWidth', 1.8, ...
+    'DisplayName', 'Aggregated Equivalent Model');
+
+EMT_points_compare = [
+    1.00, 0.1413024;
+    0.80, 0.175191;
+    0.60, 0.23137163;
+    0.50, 0.2784;
+    0.40, 0.29214;
+    0.20, 0.00567
+];
+
+h_emt = plot(EMT_points_compare(:,1), EMT_points_compare(:,2), ...
+    'ko', ...
+    'LineStyle', 'none', ...
+    'MarkerSize', 6, ...
+    'MarkerFaceColor', 'none', ...
+    'MarkerEdgeColor', 'k', ...
+    'LineWidth', 1.2, ...
+    'DisplayName', 'EMT');
+
+EMTeq_points_compare = [
+    1.00, 0.1413022;
+    0.80, 0.174507;
+    0.60, 0.23226;
+    0.50, 0.2777;
+    0.40, 0.29164;
+    0.20, 0.0057
+];
+
+h_emteq = plot(EMTeq_points_compare(:,1), EMTeq_points_compare(:,2), ...
+    'k^', ...
+    'LineStyle', 'none', ...
+    'MarkerSize', 6, ...
+    'MarkerFaceColor', 'none', ...
+    'MarkerEdgeColor', 'k', ...
+    'LineWidth', 1.2, ...
+    'DisplayName', 'EMTeq');
+
 grid on;
 
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
+xlabel('$|V_p|({\rm p.u.})$', ...
     'Interpreter', 'latex', ...
     'FontSize', labelFontSize);
 
-ylabel('Current Error (p.u.)', ...
-    'FontName', fontName, ...
+ylabel('$|I_p|({\rm p.u.})$', ...
+    'Interpreter', 'latex', ...
     'FontSize', labelFontSize);
 
-lgd = legend( ...
-    '$\vert \mathrm{e}_{\rm vd}\vert$', ...
-    '$\vert \mathrm{e}_{\rm fs}\vert$', ...
-    'Interpreter', 'latex', ...
+legend([h_detail, h_equiv, h_emt, h_emteq], ...
+    {'Original', 'Aggregated', 'EMT', 'EMTeq'}, ...
     'Location', 'northeast');
 
-set(lgd, ...
-    'FontName', fontName, ...
-    'FontSize', legendFontSize);
+ylim([-0.05, 0.35]);
 
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '电压分散误差与函数结构误差', ...
-    'NumberTitle', 'off');
-
-
-%% 15.4 误差分解校验
-
-figure;
-plot(Vp_pu_from_actual, error_decomp_check_3ph_pu, 'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$\vert \mathrm{e}_{\rm vd}+\mathrm{e}_{\rm fs}-\mathrm{e}\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
+text(0.95, 0.05, 'B', ...
+    'Units', 'normalized', ...
+    'HorizontalAlignment', 'right', ...
+    'VerticalAlignment', 'bottom', ...
+    'FontName', 'Times New Roman', ...
+    'FontSize', 16, ...
+    'FontWeight', 'bold', ...
+    'Color', 'k');
 
 set(gcf, ...
     'Color', 'w', ...
-    'Name', '误差分解校验', ...
+    'Name', '并网点电流详细模型、等值模型与EMT对比', ...
     'NumberTitle', 'off');
 
+% ============================================================
+% 15.3 CaseIb-Comparison of PCC current among the detailed model, equivalent model, EMT, and EMTeq
+%  15.3 CaseIb-并网点电流详细模型、等值模型与 EMT/EMTeq 对比
+% ============================================================
 
-%% 15.5 单独绘制 |evd|
-
-figure;
-plot(Vp_pu_from_actual, evd_3ph_pu, 'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$\vert \mathrm{e}_{\rm vd}\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '|evd|', ...
-    'NumberTitle', 'off');
-
-
-%% 15.6 单独绘制 |efs|
-
-figure;
-plot(Vp_pu_from_actual, efs_3ph_pu, 'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$\vert \mathrm{e}_{\rm fs}\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '|efs|', ...
-    'NumberTitle', 'off');
-
-
-%% 15.7 单独绘制 |etot|
-
-figure;
-plot(Vp_pu_from_actual, etot_3ph_pu, 'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$\vert \mathrm{e}\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '|e|', ...
-    'NumberTitle', 'off');
-
-
-%% 15.8 |evd| 与分支自适应结果1
-% 结果1：同一分支用式(50)，不同分支用式(53)
-
-figure;
-plot(Vp_pu_from_actual, evd_3ph_pu, 'LineWidth', 1.8);
-hold on;
-plot(Vp_pu_from_actual, evd_piecewise_approx_3ph_pu, '--', 'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$\vert \mathrm{e}_{\rm vd}\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-lgd = legend( ...
-    '$\vert \mathrm{e}_{\rm vd}\vert$', ...
-    '$\vert \hat{\mathrm{e}}_{\rm vd}\vert$', ...
-    'Interpreter', 'latex', ...
-    'Location', 'northeast');
-
-set(lgd, ...
-    'FontName', fontName, ...
-    'FontSize', legendFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '|evd|与其近似', ...
-    'NumberTitle', 'off');
-
-
-%% 15.9 |efs| 与分支自适应结果2
-% 结果2：同一分支用式(60)，不同分支用式(63)
-
-figure;
-plot(Vp_pu_from_actual, efs_3ph_pu, 'LineWidth', 1.8);
-hold on;
-plot(Vp_pu_from_actual, efs_piecewise_approx_3ph_pu, '--', 'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$\vert \mathrm{e}_{\rm fs}\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-lgd = legend( ...
-    '$\vert \mathrm{e}_{\rm fs}\vert$', ...
-    '$\vert \hat{\mathrm{e}}_{\rm fs}\vert$', ...
-    'Interpreter', 'latex', ...
-    'Location', 'northeast');
-
-set(lgd, ...
-    'FontName', fontName, ...
-    'FontSize', legendFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '|efs|与其近似', ...
-    'NumberTitle', 'off');
-
-
-%% 15.10 |etot| 与结果1+结果2
-% 结果1 + 结果2 = evd_piecewise_approx + efs_piecewise_approx
-
-figure;
-plot(Vp_pu_from_actual, etot_3ph_pu, 'LineWidth', 1.8);
-hold on;
-plot(Vp_pu_from_actual, etot_piecewise_approx_3ph_pu, '--', 'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$\vert \mathrm{e}\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-lgd = legend( ...
-    '$\vert \mathrm{e}\vert$', ...
-    '$\vert \hat{\mathrm{e}}_{\rm vd}+\hat{\mathrm{e}}_{\rm fs}\vert$', ...
-    'Interpreter', 'latex', ...
-    'Location', 'northeast');
-
-set(lgd, ...
-    'FontName', fontName, ...
-    'FontSize', legendFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '|etot|与其近似', ...
-    'NumberTitle', 'off');
-
-
-%% 15.11 KCL 残差与原始侧分支切换残差
-
-figure;
-plot(Vp_pu_from_actual, rI_alpha_norm_plot, 'LineWidth', 1.8);
-hold on;
-plot(Vp_pu_from_actual, mI_norm_plot, '--', 'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('Residual Norm (p.u.)', ...
-    'FontName', fontName, ...
-    'FontSize', labelFontSize);
-
-lgd = legend( ...
-    '$\Vert r_I^\alpha\Vert$', ...
-    '$\Vert m_I^{\alpha\rightarrow\alpha^*}\Vert$', ...
-    'Interpreter', 'latex', ...
-    'Location', 'northeast');
-
-set(lgd, ...
-    'FontName', fontName, ...
-    'FontSize', legendFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', 'KCL 残差与原始侧分支不一致残差', ...
-    'NumberTitle', 'off');
-
-
-%% 15.12 函数结构残差与等值侧分支切换残差
-
-figure;
-plot(Vp_pu_from_actual, delta_ab_norm_plot, 'LineWidth', 1.8);
-hold on;
-plot(Vp_pu_from_actual, me_norm_plot, '--', 'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('Residual Magnitude (p.u.)', ...
-    'FontName', fontName, ...
-    'FontSize', labelFontSize);
-
-lgd = legend( ...
-    '$\vert\delta_{\alpha,\beta}\vert$', ...
-    '$\vert m_{\rm e}^{\beta\rightarrow\beta^*}\vert$', ...
-    'Interpreter', 'latex', ...
-    'Location', 'northeast');
-
-set(lgd, ...
-    'FontName', fontName, ...
-    'FontSize', legendFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '函数结构残差与等值侧分支不一致残差', ...
-    'NumberTitle', 'off');
-
-
-%% 15.13 分支不一致数量
-
-figure;
-stairs(Vp_pu_from_actual, branchMismatchCount_plot, 'LineWidth', 1.8);
-hold on;
-stairs(Vp_pu_from_actual, eqBranchMismatch_plot, '--', 'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('Number of Branch Mismatches (n)', ...
-    'FontName', fontName, ...
-    'FontSize', labelFontSize);
-
-lgd = legend( ...
-    'Original-side Branch Mismatches', ...
-    'Equivalent-side branch mismatch flag', ...
-    'Location', 'northeast');
-
-set(lgd, ...
-    'FontName', fontName, ...
-    'FontSize', legendFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '原始侧与等值侧分支不一致情况', ...
-    'NumberTitle', 'off');
-
-
-%% 15.14 原始侧分支自适应 M_I 条件数
-
-figure;
-semilogy(Vp_pu_from_actual, condMI_piecewise_plot, 'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('Condition Number', ...
-    'FontName', fontName, ...
-    'FontSize', labelFontSize);
-
-lgd = legend( ...
-    '$\mathrm{cond}(M_I)$', ...
-    'Interpreter', 'latex', ...
-    'Location', 'northeast');
-
-set(lgd, ...
-    'FontName', fontName, ...
-    'FontSize', legendFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '原始侧分支自适应灵敏度矩阵条件数', ...
-    'NumberTitle', 'off');
-
-
-%% 15.15 等值侧分支自适应 M_e 条件数
-
-figure;
-semilogy(Vp_pu_from_actual, condMe_piecewise_plot, 'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('Condition Number', ...
-    'FontName', fontName, ...
-    'FontSize', labelFontSize);
-
-lgd = legend( ...
-    '$\mathrm{cond}(M_{\rm e})$', ...
-    'Interpreter', 'latex', ...
-    'Location', 'northeast');
-
-set(lgd, ...
-    'FontName', fontName, ...
-    'FontSize', legendFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '等值侧分支自适应灵敏度矩阵条件数', ...
-    'NumberTitle', 'off');
-
-
-
-
-%% 15.16 无源网络偏差 |b_cv|
-
-figure;
-plot(Vp_pu_from_actual, bcv_3ph_pu, 'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$\vert b_{\rm cv}\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '无源网络偏差bcv', ...
-    'NumberTitle', 'off');
-
-
-%% 15.17 原始侧分支自适应传播算子范数
-% 同一分支：||YpI(M_I^alpha)^(-1)||_2
-% 不同分支：||YpI(M_I^alphaStar)^(-1)||_2
-
-figure;
-semilogy(Vp_pu_from_actual, max(Kvd_piecewiseNorm_plot, eps), ...
-    'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$\Vert Y_{pI}M_I^{-1}\Vert_2$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-lgd = legend( ...
-    '$\Vert Y_{pI}M_I^{-1}\Vert_2$ ', ...
-    'Interpreter', 'latex', ...
-    'Location', 'northeast');
-
-set(lgd, ...
-    'FontName', fontName, ...
-    'FontSize', legendFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '原始侧分支自适应传播算子范数', ...
-    'NumberTitle', 'off');
-
-
-%% 15.18 等值侧分支自适应传播算子范数
-% 同一分支：||-Ype^eq(M_e^beta)^(-1)||_2
-% 不同分支：||-Ype^eq(M_e^betaStar)^(-1)||_2
-
-figure;
-semilogy(Vp_pu_from_actual, max(Kfs_piecewiseNorm_plot, eps), ...
-    'LineWidth', 1.8);
-grid on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$\Vert-Y_{pe}^{\rm eq}M_{\rm e}^{-1}\Vert_2$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-lgd = legend( ...
-    '$\Vert-Y_{pe}^{\rm eq}M_{\rm e}^{-1}\Vert_2$ ', ...
-    'Interpreter', 'latex', ...
-    'Location', 'northeast');
-
-set(lgd, ...
-    'FontName', fontName, ...
-    'FontSize', legendFontSize);
-
-set(gca, ...
-    'FontName', fontName, ...
-    'FontSize', axisFontSize, ...
-    'LineWidth', 1.2);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '等值侧分支自适应传播算子范数', ...
-    'NumberTitle', 'off');
-
-
-% %% 15.16 PCC 电流实部、虚部对比
 % 
 % figure;
-% plot(Vp_pu_from_actual, real(Ip_detail_complex_3ph), 'LineWidth', 1.6);
+% 
+% h_detail = plot(Vp_pu_from_actual, Ip_3ph_pu_from_actual, ...
+%     'LineWidth', 1.8, ...
+%     'DisplayName', 'Original Cluster Model');
 % hold on;
-% plot(Vp_pu_from_actual, real(Ip_equiv_complex_3ph), '--', 'LineWidth', 1.6);
-% plot(Vp_pu_from_actual, imag(Ip_detail_complex_3ph), 'LineWidth', 1.6);
-% plot(Vp_pu_from_actual, imag(Ip_equiv_complex_3ph), '--', 'LineWidth', 1.6);
+% 
+% h_equiv = plot(Vp_pu_from_actual, Ipeq_3ph_pu_from_actual, ...
+%     '--', ...
+%     'LineWidth', 1.8, ...
+%     'DisplayName', 'Aggregated Equivalent Model');
+% 
+% EMT_points_compare = [
+%     1.00, 0.1413024;
+%     0.80, 0.1577401;
+%     0.60, 0.18586;
+%     0.50, 0.20876;
+%     0.40, 0.2155;
+%     0.20, 0.00567
+% ];
+% 
+% h_emt = plot(EMT_points_compare(:,1), EMT_points_compare(:,2), ...
+%     'ko', ...
+%     'LineStyle', 'none', ...
+%     'MarkerSize', 6, ...
+%     'MarkerFaceColor', 'none', ...
+%     'MarkerEdgeColor', 'k', ...
+%     'LineWidth', 1.2, ...
+%     'DisplayName', 'EMT');
+% 
+% EMTeq_points_compare = [
+%     1.00, 0.1413024;
+%     0.80, 0.15749;
+%     0.60, 0.18586;
+%     0.50, 0.2081466;
+%     0.40, 0.2155;
+%     0.20, 0.005677
+% ];
+% 
+% h_emteq = plot(EMTeq_points_compare(:,1), EMTeq_points_compare(:,2), ...
+%     'k^', ...
+%     'LineStyle', 'none', ...
+%     'MarkerSize', 6, ...
+%     'MarkerFaceColor', 'none', ...
+%     'MarkerEdgeColor', 'k', ...
+%     'LineWidth', 1.2, ...
+%     'DisplayName', 'EMTeq');
+% 
 % grid on;
 % 
-% xlabel('$\vert V_p\vert({\rm p.u.})$', ...
+% xlabel('$|V_p|({\rm p.u.})$', ...
 %     'Interpreter', 'latex', ...
 %     'FontSize', labelFontSize);
 % 
-% ylabel('$I_p({\rm p.u.})$', ...
+% ylabel('$|I_p|({\rm p.u.})$', ...
 %     'Interpreter', 'latex', ...
 %     'FontSize', labelFontSize);
 % 
-% lgd = legend( ...
-%     '{\fontsize{12}\rm Re}(I_p)  {\fontsize{11}\rm Original cluster model}', ...
-%     '{\fontsize{12}\rm Re}(I_p^{\rm eq}){\fontsize{11}\rm Aggregated equivalent model}', ...
-%     '{\fontsize{12}\rm Im}(I_p)  {\fontsize{11}\rm Original cluster model}', ...
-%     '{\fontsize{12}\rm Im}(I_p^{\rm eq}){\fontsize{11}\rm Aggregated equivalent model}', ...
-%     'Interpreter', 'tex', ...
-%     'FontName', fontName, ...
-%     'FontSize', 10, ...
+% legend([h_detail, h_equiv, h_emt, h_emteq], ...
+%     {'Original', 'Aggregated', 'EMT', 'EMTeq'}, ...
 %     'Location', 'northeast');
 % 
-% set(lgd, ...
-%     'FontName', fontName, ...
-%     'FontSize', legendFontSize);
+% ylim([-0.05, 0.27]);
 % 
-% set(gca, ...
-%     'FontName', fontName, ...
-%     'FontSize', axisFontSize, ...
-%     'LineWidth', 1.2);
+% text(0.95, 0.05, 'B', ...
+%     'Units', 'normalized', ...
+%     'HorizontalAlignment', 'right', ...
+%     'VerticalAlignment', 'bottom', ...
+%     'FontName', 'Times New Roman', ...
+%     'FontSize', 16, ...
+%     'FontWeight', 'bold', ...
+%     'Color', 'k');
 % 
 % set(gcf, ...
 %     'Color', 'w', ...
-%     'Name', 'PCC 电流实部虚部对比', ...
+%     'Name', '并网点电流详细模型、等值模型与EMT对比', ...
 %     'NumberTitle', 'off');
-
-
-% %% 15.17 脱网数量
-% 
-% figure;
-% stairs(Vp_pu_from_actual, tripCount_plot, 'LineWidth', 1.8);
-% hold on;
-% stairs(Vp_pu_from_actual, tripC_count_plot, '--', 'LineWidth', 1.8);
-% grid on;
-% 
-% xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-%     'Interpreter', 'latex', ...
-%     'FontSize', labelFontSize);
-% 
-% ylabel('Number of Tripped IBR Units (n)', ...
-%     'FontName', fontName, ...
-%     'FontSize', labelFontSize);
-% 
-% lgd = legend( ...
-%     'Original cluster model', ...
-%     'Common-voltage model', ...
-%     'Location', 'northeast');
-% 
-% set(lgd, ...
-%     'FontName', fontName, ...
-%     'FontSize', legendFontSize);
-% 
-% set(gca, ...
-%     'FontName', fontName, ...
-%     'FontSize', axisFontSize, ...
-%     'LineWidth', 1.2);
-% 
-% set(gcf, ...
-%     'Color', 'w', ...
-%     'Name', '脱网数量', ...
-%     'NumberTitle', 'off');
-
-
 
 
 %% ============================================================
-%  15.19 并网点电流详细模型、等值模型与 EMT/EMTeq 对比
-%  本段来自基础电流对比代码的画图部分，并合并到增强版误差分解程序中。
+% 15.4 CaseII-Comparison of PCC current among the detailed model, equivalent model, EMT, and EMTeq
+%  15.4 CaseII-并网点电流详细模型、等值模型与 EMT/EMTeq 对比
 % ============================================================
 
 figure;
@@ -1763,339 +1437,97 @@ set(gcf, ...
     'Name', '并网点电流详细模型、等值模型与EMT对比', ...
     'NumberTitle', 'off');
 
+% %% ============================================================
+% %  15.2 CaseIII-Comparison of PCC current among the detailed model, equivalent model, EMT, and EMTeq
+% %  15.2 CaseIII-并网点电流详细模型、等值模型与 EMT/EMTeq 对比
+% % ============================================================
+% figure;
+% 
+% h_detail = plot(Vp_pu_from_actual, Ip_3ph_pu_from_actual, ...
+%     'LineWidth', 1.8, ...
+%     'DisplayName', 'Original Cluster Model');
+% hold on;
+% 
+% h_equiv = plot(Vp_pu_from_actual, Ipeq_3ph_pu_from_actual, ...
+%     '--', ...
+%     'LineWidth', 1.8, ...
+%     'DisplayName', 'Aggregated Equivalent Model');
+% EMT_points_compare = [
+%     1.00, 0.1394488;
+%     0.80, 0.1550288;
+%     0.60, 0.1809686;
+%     0.50, 0.2012946;
+%     0.40, 0.2142338;
+%     0.30, 0.0084786;
+%     0.20, 0.0056589
+% ];
+% 
+% h_emt = plot(EMT_points_compare(:,1), EMT_points_compare(:,2), ...
+%     'ko', ...
+%     'LineStyle', 'none', ...
+%     'MarkerSize', 6, ...
+%     'MarkerFaceColor', 'none', ...
+%     'MarkerEdgeColor', 'k', ...
+%     'LineWidth', 1.2, ...
+%     'DisplayName', 'EMT');
+% 
+% EMTeq_points_compare = [
+%     1.00, 0.1394429;
+%     0.80, 0.1548385;
+%     0.60, 0.1813318;
+%     0.50, 0.2023876;
+%     0.40, 0.2136689;
+%     0.30, 0.008553;
+%     0.20, 0.0057237
+% ];
+% 
+% h_emteq = plot(EMTeq_points_compare(:,1), EMTeq_points_compare(:,2), ...
+%     'k^', ...
+%     'LineStyle', 'none', ...
+%     'MarkerSize', 6, ...
+%     'MarkerFaceColor', 'none', ...
+%     'MarkerEdgeColor', 'k', ...
+%     'LineWidth', 1.2, ...
+%     'DisplayName', 'EMTeq');
+% 
+% grid on;
+% 
+% xlabel('$|V_p|({\rm p.u.})$', ...
+%     'Interpreter', 'latex', ...
+%     'FontSize', labelFontSize);
+% 
+% ylabel('$|I_p|({\rm p.u.})$', ...
+%     'Interpreter', 'latex', ...
+%     'FontSize', labelFontSize);
+% 
+% legend([h_detail, h_equiv, h_emt, h_emteq], ...
+%     {'Original', 'Aggregated', 'EMT', 'EMTeq'}, ...
+%     'Location', 'northeast');
+% 
+% ylim([-0.05, 0.27]);
+% 
+% 
+% text(0.95, 0.05, 'B', ...
+%     'Units', 'normalized', ...
+%     'HorizontalAlignment', 'right', ...
+%     'VerticalAlignment', 'bottom', ...
+%     'FontName', 'Times New Roman', ...
+%     'FontSize', 16, ...
+%     'FontWeight', 'bold', ...
+%     'Color', 'k');
+% 
+% set(gcf, ...
+%     'Color', 'w', ...
+%     'Name', '并网点电流详细模型、等值模型与EMT对比', ...
+%     'NumberTitle', 'off');
 
-%% ============================================================
-%  15.20 并网点电流 d/q 分量：详细模型与等值模型对比
-%  说明：这里使用三相合成标幺值口径，即 sqrt(3)*Ip_plot。
-% ============================================================
-
-figure;
-
-plot(Vp_pu_from_actual, real(Ip_detail_complex_3ph), ...
-    'LineWidth', 1.6);
-hold on;
-
-plot(Vp_pu_from_actual, real(Ip_equiv_complex_3ph), ...
-    '--', ...
-    'LineWidth', 1.6);
-
-plot(Vp_pu_from_actual, imag(Ip_detail_complex_3ph), ...
-    'LineWidth', 1.6);
-
-plot(Vp_pu_from_actual, imag(Ip_equiv_complex_3ph), ...
-    '--', ...
-    'LineWidth', 1.6);
-
-grid on;
-
-xlabel('$|V_p|({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$i_d,i_q({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-legend( ...
-    '{\fontsize{13}\it i_d}{\fontsize{12}\rm Original}', ...
-    '{\fontsize{13}\it i_{d,\rm eq}}{\fontsize{12}\rm Aggregated}', ...
-    '{\fontsize{13}\it i_q}{\fontsize{12}\rm Original}', ...
-    '{\fontsize{13}\it i_{q,\rm eq}}{\fontsize{12}\rm Aggregated}', ...
-    'Interpreter', 'tex', ...
-    'FontName', 'Times New Roman', ...
-    'FontSize', 14, ...
-    'Location', 'northeast', ...
-    'Orientation', 'horizontal', ...
-    'NumColumns', 2);
-
-ylim([-0.3, 0.3]);
-
-text(0.95, 0.05, 'B', ...
-    'Units', 'normalized', ...
-    'HorizontalAlignment', 'right', ...
-    'VerticalAlignment', 'bottom', ...
-    'FontName', 'Times New Roman', ...
-    'FontSize', 16, ...
-    'FontWeight', 'bold', ...
-    'Color', 'k');
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '并网点电流dq分量详细模型与等值模型对比', ...
-    'NumberTitle', 'off');
-
-
-%% ============================================================
-%  15.21 并网点电流 d/q 分量：详细模型
-% ============================================================
-
-figure;
-
-plot(Vp_pu_from_actual, real(Ip_detail_complex_3ph), ...
-    'LineWidth', 1.6);
-hold on;
-
-plot(Vp_pu_from_actual, imag(Ip_detail_complex_3ph), ...
-    '--', ...
-    'LineWidth', 1.6);
-
-grid on;
-
-xlabel('$|V_p|({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$i_d,i_q({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-legend( ...
-    '$i_d$', ...
-    '$i_q$', ...
-    'Interpreter', 'latex', ...
-    'Location', 'northeast');
-
-ylim([-0.3, 0.3]);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '并网点电流dq分量详细模型', ...
-    'NumberTitle', 'off');
-
-
-%% ============================================================
-%  15.22 并网点电流 d/q 分量：等值模型
-% ============================================================
-
-figure;
-
-plot(Vp_pu_from_actual, real(Ip_equiv_complex_3ph), ...
-    'LineWidth', 1.6);
-hold on;
-
-plot(Vp_pu_from_actual, imag(Ip_equiv_complex_3ph), ...
-    '--', ...
-    'LineWidth', 1.6);
-
-grid on;
-
-xlabel('$|V_p|({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$i_{d,\rm eq},i_{q,\rm eq}({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-legend( ...
-    '$i_{d,\rm eq}$', ...
-    '$i_{q,\rm eq}$', ...
-    'Interpreter', 'latex', ...
-    'Location', 'northeast');
-
-ylim([-0.3, 0.3]);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '并网点电流dq分量等值模型', ...
-    'NumberTitle', 'off');
-
-
-%% ============================================================
-%  15.23 并网点电流详细模型与等值模型误差绝对值
-% ============================================================
-
-figure;
-
-plot(Vp_pu_from_actual, abs(Ip_detail_complex_3ph - Ip_equiv_complex_3ph), ...
-    'LineWidth', 1.8);
-
-grid on;
-
-xlabel('$|V_p|({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$|I_p-I_p^{\rm eq}|({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '并网点电流详细模型与等值模型误差绝对值', ...
-    'NumberTitle', 'off');
-
-
-%% ============================================================
-%  15.24 等值光伏电流与详细模型光伏电流和对比
-% ============================================================
-
-figure;
-
-plot(Vp_pu_from_actual, I_PVsum_detail_3ph_pu, ...
-    'LineWidth', 1.8);
-hold on;
-
-plot(Vp_pu_from_actual, I_PVeq_3ph_pu, ...
-    '--', ...
-    'LineWidth', 1.8);
-
-grid on;
-
-xlabel('$|V_p|({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$|I_{\rm PV}|({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-legend( ...
-    'Original sum', ...
-    'Aggregated equivalent', ...
-    'Location', 'northeast');
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '等值光伏电流与详细模型光伏电流和对比', ...
-    'NumberTitle', 'off');
-
-
-%% ============================================================
-%  15.25 等值光伏电流 d/q 分量
-% ============================================================
-
-figure;
-
-plot(Vp_pu_from_actual, real(I_PVeq_complex_3ph), ...
-    'LineWidth', 1.6);
-hold on;
-
-plot(Vp_pu_from_actual, imag(I_PVeq_complex_3ph), ...
-    '--', ...
-    'LineWidth', 1.6);
-
-grid on;
-
-xlabel('$|V_p|({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$i_{d,\rm PVeq},i_{q,\rm PVeq}({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-legend( ...
-    '$i_{d,\rm PVeq}$', ...
-    '$i_{q,\rm PVeq}$', ...
-    'Interpreter', 'latex', ...
-    'Location', 'northeast');
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '等值光伏电流dq分量', ...
-    'NumberTitle', 'off');
-
-
-%% ============================================================
-%  15.26 等值节点方程残差
-% ============================================================
-
-figure;
-
-plot(Vp_pu_from_actual, abs(eq_node_residual_plot), ...
-    'LineWidth', 1.8);
-
-grid on;
-
-xlabel('$|V_p|({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$|{\rm Residual}|$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '等值节点方程残差', ...
-    'NumberTitle', 'off');
-
-
-%% ============================================================
-%  15.27 脱网光伏数量随并网点电压变化
-% ============================================================
-
-figure;
-
-stairs(Vp_pu_from_actual, tripCount_plot, ...
-    'LineWidth', 1.8);
-
-grid on;
-
-xlabel('$|V_p|({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('Number of tripped IBR units', ...
-    'FontName', fontName, ...
-    'FontSize', labelFontSize);
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '脱网光伏数量随并网点电压变化', ...
-    'NumberTitle', 'off');
-
-
-%% ============================================================
-%  15.28 各光伏节点端电压随并网点电压变化
-% ============================================================
-
-figure;
-
-voltage_abs_pv = abs(VI_plot);
-voltage_abs_pv_plot = transpose(voltage_abs_pv);
-
-plot(Vp_pu_from_actual, voltage_abs_pv_plot, ...
-    'LineWidth', 1.5);
-
-grid on;
-hold on;
-
-xlabel('$\vert V_p\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-ylabel('$\vert V_I\vert({\rm p.u.})$', ...
-    'Interpreter', 'latex', ...
-    'FontSize', labelFontSize);
-
-label_cell = cell(nPV, 1);
-
-for kk = 1:nPV
-    label_cell{kk} = sprintf('bus%d', kk+1);
-end
-
-lgd = legend(label_cell, ...
-    'Location', 'northeast', ...
-    'Orientation', 'horizontal', ...
-    'NumColumns', 3);
-
-set(lgd, ...
-    'FontName', 'Times New Roman', ...
-    'FontSize', 10, ...
-    'Box', 'on');
-
-set(gcf, ...
-    'Color', 'w', ...
-    'Name', '各光伏节点端电压随并网点电压变化', ...
-    'NumberTitle', 'off');
 
 
 y_etot = etot_3ph_pu;
 y_evd  = evd_3ph_pu;
 y_efs  = efs_3ph_pu;
 
+% If the horizontal-axis samples are equally spaced, use the ordinary RMS
 % 如果横坐标采样点等间距，用普通 RMS
 rms_etot = sqrt(mean(y_etot.^2));
 rms_evd  = sqrt(mean(y_evd.^2));
@@ -2105,20 +1537,30 @@ fprintf('|e_tot| RMS = %.6e p.u.\n', rms_etot);
 fprintf('|e_vd | RMS = %.6e p.u.\n', rms_evd);
 fprintf('|e_fs | RMS = %.6e p.u.\n', rms_efs);
 %% ============================================================
+% Uniformly set the font family and font size for all figures
 %  统一设置所有图片字体和字号
+% Note: EMT annotations keep a separate smaller font size
 %  注意：EMT 标注单独保持小字号
 % ============================================================
 
+% Font settings
 % 字体设置
 fontName = 'Times New Roman';
 
+% Font-size settings
 % 字号设置
+% axisFontSize    = 16;   % font size of axis tick labels
 axisFontSize    = 16;   % 坐标轴刻度数字字号
+% labelFontSize   = 18;   % x/y font size of x/y axis labels
 labelFontSize   = 18;   % x/y 坐标轴标题字号
+% titleFontSize   = 10;   % font size of figure titles
 titleFontSize   = 10;   % 图标题字号
+% legendFontSize  = 12;   % font size of legends
 legendFontSize  = 12;   % 图例字号
+% emtTextFontSize = 12;    % font size of EMT annotations; reduce to 3.5 if it is still too large
 emtTextFontSize = 12;    % EMT 标注字号，觉得还大可以改成 3.5
 
+% Get all figures
 % 获取所有 figure
 figHandles = findall(0, 'Type', 'figure');
 
@@ -2126,9 +1568,11 @@ for iFig = 1:length(figHandles)
 
     fig = figHandles(iFig);
 
+    % Set the figure background to white
     % 设置图背景为白色
     set(fig, 'Color', 'w');
 
+    % Find all axes in the current figure
     % 找到当前 figure 中所有坐标轴
     axList = findall(fig, 'Type', 'axes');
 
@@ -2136,27 +1580,33 @@ for iFig = 1:length(figHandles)
 
         ax = axList(iAx);
 
+        % Font family and font size of axis tick labels
         % 坐标轴刻度数字字体和字号
         set(ax, ...
             'FontName', fontName, ...
             'FontSize', axisFontSize, ...
             'LineWidth', 1.2);
 
+        % x-axis label
         % x 轴标签
         ax.XLabel.FontName = fontName;
         ax.XLabel.FontSize = labelFontSize;
 
+        % y-axis label
         % y 轴标签
         ax.YLabel.FontName = fontName;
         ax.YLabel.FontSize = labelFontSize;
 
+        % title
         % 标题
         ax.Title.FontName = fontName;
         ax.Title.FontSize = titleFontSize;
 
     end
 
+    % Modify legend font
     % 修改图例字体
+% English note: 注意: Legends with Tag = LargeLegend keep a large font size and are not affected by the unified legendFontSize
 % 注意：Tag = LargeLegend 的图例保持大字号，不受统一 legendFontSize 影响
 lgdList = findall(fig, 'Type', 'legend');
 
@@ -2181,6 +1631,7 @@ for iLgd = 1:length(lgdList)
 
 end
 
+    % Only modify EMT annotations separately; do not change all text objects to size 18
     % 只单独修改 EMT 标注，不再把所有 text 都改成 18 号
     textList = findall(fig, 'Type', 'text');
 
@@ -2190,7 +1641,9 @@ end
         txtStr = get(txt, 'String');
         txtTag = get(txt, 'Tag');
 
+        % Case 1: Tag was set in the previous text() call 'Tag','EMTText'
         % 情况1：前面 text() 里设置了 'Tag','EMTText'
+        % Case 2: Tag is not set, but the text contains EMT
         % 情况2：没有设置 Tag，但文字里包含 EMT
         if strcmp(txtTag, 'EMTText') || contains(string(txtStr), 'EMT')
 
@@ -2203,25 +1656,31 @@ end
     end
 end
 % % % ============================================================
+% %  Save all figures as PNG files using each figure Name
 % %  保存所有图片为 PNG：按 figure 的 Name 命名
 % % ============================================================
 % 
+% English note: % Figure save folder: 桌面\项目excel\论文figure\同输入
 % % 图片保存文件夹：桌面\项目excel\论文图片\同输入
 % if ispc && ~isempty(getenv('USERPROFILE'))
 %     figSaveDir = fullfile(getenv('USERPROFILE'), ...
+% English note: 'Desktop', '项目excel', '论文figure', '同输入','含shunt','不同质, 其余不同');
 %         'Desktop', '项目excel', '论文图片', '同输入','含shunt','不同质，其余不同');
 % else
 %     figSaveDir = fullfile(pwd, 'results');
 % end
 % 
+% % Create the folder automatically if it does not exist
 % % 如果文件夹不存在，则自动创建
 % if ~exist(figSaveDir, 'dir')
 %     mkdir(figSaveDir);
 % end
 % 
+% English note: % 获取当前所有 figure
 % % 获取当前所有 figure
 % figHandles = findall(0, 'Type', 'figure');
 % 
+% % Sort by figure number
 % % 按 figure 编号排序
 % [~, idxFig] = sort([figHandles.Number]);
 % figHandles = figHandles(idxFig);
@@ -2230,35 +1689,44 @@ end
 % 
 %     fig = figHandles(iFig);
 % 
+% English note: % settings白色背景
 %     % 设置白色背景
 %     set(fig, 'Color', 'w');
 % 
+% % Read the figure Name
 %     % 读取 figure 的 Name
 %     figName = get(fig, 'Name');
 % 
+% % Use a default number if Name is not set
 %     % 如果没有设置 Name，就用默认编号
 %     if isempty(figName)
 %         figName = sprintf('Figure_%02d', iFig);
 %     end
 % 
+% % Replace invalid characters in the file name
 %     % 把文件名中的非法字符替换掉
 %     figName = regexprep(figName, '[\\/:*?"<>|]', '_');
 % 
+% % Avoid an overly long file name
 %     % 避免文件名太长
 %     if strlength(figName) > 120
 %         figName = extractBefore(figName, 121);
 %     end
 % 
+% % Full save path
 %     % 完整保存路径
 %     filePath = fullfile(figSaveDir, [char(figName), '.png']);
 % 
+% % Save as PNG at 300 dpi
 %     % 保存为 PNG，300 dpi
 %     exportgraphics(fig, filePath, 'Resolution', 300);
 % 
 % end
 % 
+% fprintf('All figures have been saved to the folder using figure names: %s\n', figSaveDir);
 % fprintf('所有图片已按图名保存到文件夹：%s\n', figSaveDir);
 %% ============================================================
+% 16. Save results to the workspace
 %  16. 保存结果到工作区
 % ============================================================
 
@@ -2360,6 +1828,7 @@ result.bcv = bcv_plot;
 result.bcv_3ph_pu = bcv_3ph_pu;
 result.rI_norm = rI_norm_plot;
 
+% English note: 原始侧branch自适应propagation operator K_vd = YpI M_I^(-1)
 % 原始侧分支自适应传播算子 K_vd = YpI M_I^(-1)
 result.KvdAlphaNorm = KvdAlphaNorm_plot;
 result.KvdAlphaStarNorm = KvdAlphaStarNorm_plot;
@@ -2404,6 +1873,7 @@ result.condMeBeta = condMeBeta_plot;
 result.condMeBetaStar = condMeBetaStar_plot;
 result.condMe_piecewise = condMe_piecewise_plot;
 
+% English note: 等值侧branch自适应propagation operator K_fs = -Ype^eq M_e^(-1)
 % 等值侧分支自适应传播算子 K_fs = -Ype^eq M_e^(-1)
 result.KfsBetaNorm = KfsBetaNorm_plot;
 result.KfsBetaStarNorm = KfsBetaStarNorm_plot;
@@ -2442,18 +1912,21 @@ result.T_eq_vp1 = T_eq;
 
 assignin('base', 'Ip_Vp_trip_iter_node0_result_modified_branch_fusion', result);
 
+% Computation completed. Results have been saved to the workspace variable Ip_Vp_trip_iter_node0_result_modified_branch_fusion.
 disp('计算完成。结果已保存到工作区变量 Ip_Vp_trip_iter_node0_result_modified_branch_fusion。');
 
 end
 
 %% ========================================================================
+% Construct the admittance matrix
 %  构造导纳矩阵
 % ========================================================================
 
 function Y = build_Y_7bus(lineScale)
 
 j = 1i;
-
+% Same input voltage
+% 同输入电压
 Y = zeros(8,8);
 
 branch = [
@@ -2466,7 +1939,8 @@ branch = [
     1   6   0.002    0.0035   0.002;
     1   7   0.002    0.0035   0.002;
 ];
-
+% Different input voltage
+% 不同输入电压
 % branch = [
 %     0   1   0.0001   0.0003   0.000;
 % 
@@ -2498,12 +1972,14 @@ for kk = 1:size(branch,1)
 
 end
 
+% System admittance matrix Y =
 disp('系统导纳矩阵 Y = ');
 disp(Y);
 
 end
 
 %% ========================================================================
+% Residual equation of the detailed model
 %  详细模型残差方程
 % ========================================================================
 
@@ -2526,6 +2002,7 @@ F = [real(res); imag(res)];
 end
 
 %% ========================================================================
+% Tripping iteration of the equivalent model
 %  等值模型脱网迭代
 % ========================================================================
 
@@ -2569,6 +2046,7 @@ for tripIter = 1:maxTripIter
         end
 
         if exitflag_final <= 0
+            % English note: equivalent model: Vp = %.4f, tripped迭代 %d 时may not have converged.
             warning('等值模型：Vp = %.4f，脱网迭代 %d 时可能未收敛。', ...
                 Vp_abs, tripIter);
         end
@@ -2588,6 +2066,7 @@ for tripIter = 1:maxTripIter
 end
 
 if tripIter >= maxTripIter
+    % equivalent model: Vp = %.4f reached the maximum number of tripping iterations.
     warning('等值模型：Vp = %.4f 达到最大脱网迭代次数。', Vp_abs);
 end
 
@@ -2607,6 +2086,7 @@ end
 end
 
 %% ========================================================================
+% Residual equation of the equivalent model
 %  等值模型残差方程
 % ========================================================================
 
@@ -2623,6 +2103,7 @@ F = [real(res); imag(res)];
 end
 
 %% ========================================================================
+% Detailed PV current model
 %  详细光伏电流模型
 % ========================================================================
 
@@ -2652,6 +2133,7 @@ end
 end
 
 %% ========================================================================
+% Single-PV current model
 %  单台光伏电流模型
 % ========================================================================
 
@@ -2672,6 +2154,7 @@ Iq0 = pv.Iq0_single * cap;
 if isfield(pv, 'Imax_single_vec') && ~isempty(pv.Imax_single_vec)
 
     if k > length(pv.Imax_single_vec)
+        % Imax_single_vec has insufficient length.
         error('Imax_single_vec 长度不足。');
     end
 
@@ -2720,6 +2203,7 @@ else
                 ];
 
             otherwise
+                % Unknown control type.
                 error('未知控制类型。');
 
         end
@@ -2733,6 +2217,7 @@ u = project_current_limit(u0, Imax, pv.priority);
 id = u(1);
 iq = u(2);
 
+% Here id - j*iq is used to keep the dq-coordinate positive direction consistent with EMT
 % 这里使用 id - j*iq，是为了与 EMT 中 dq 坐标正方向保持一致
 I_local = id - 1j*iq;
 
@@ -2741,6 +2226,7 @@ I = I_local * eV;
 end
 
 %% ========================================================================
+% Equivalent PV current model
 %  等值光伏电流模型
 % ========================================================================
 
@@ -2795,6 +2281,7 @@ end
 id = u_mix(1);
 iq = u_mix(2);
 
+% Here id - j*iq is used to keep the dq-coordinate positive direction consistent with EMT
 % 这里使用 id - j*iq，是为了与 EMT 中 dq 坐标正方向保持一致
 I_local = id - 1j*iq;
 
@@ -2803,6 +2290,7 @@ Ieq = I_local * eV;
 end
 
 %% ========================================================================
+% Tripping iteration of the common-voltage model
 %  公共电压模型脱网迭代
 % ========================================================================
 
@@ -2848,6 +2336,7 @@ for tripIter = 1:maxTripIter
     end
 
     if exitflag_final <= 0
+        % English note: Common-voltage model: Vp = %.4f, tripped迭代 %d 时may not have converged.
         warning('公共电压模型：Vp = %.4f，脱网迭代 %d 时可能未收敛。', ...
             Vp_abs, tripIter);
     end
@@ -2876,6 +2365,7 @@ for tripIter = 1:maxTripIter
 end
 
 if tripIter >= maxTripIter
+    % Common-voltage model: Vp = %.4f reached the maximum number of tripping iterations.
     warning('公共电压模型：Vp = %.4f 达到最大脱网迭代次数。', Vp_abs);
 end
 
@@ -2895,6 +2385,7 @@ end
 end
 
 %% ========================================================================
+% Residual equation of the common-voltage model
 %  公共电压模型残差方程
 % ========================================================================
 
@@ -2911,6 +2402,7 @@ F = [real(res); imag(res)];
 end
 
 %% ========================================================================
+% Current summation rule under the same input voltage G(Vc)
 %  同输入电流求和规律 G(Vc)
 % ========================================================================
 
@@ -2942,6 +2434,7 @@ end
 end
 
 %% ========================================================================
+% Compute passive-network bias bcv and common-voltage KCL residual rI
 %  计算无源网络偏差 bcv 和公共电压 KCL 残差 rI
 % ========================================================================
 
@@ -2985,7 +2478,8 @@ bcv = H_common_original - Hc;
 end
 
 %% ========================================================================
-%  电压分散误差式（50）和式（53）近似计算
+% Approximate calculation of the voltage-dispersion error formula
+%  电压分散误差式近似计算
 % ========================================================================
 
 function [evd_consistent_approx, evd_branch_approx, mI_aug, rI_alpha_aug, condM, ...
@@ -2999,6 +2493,7 @@ function [evd_consistent_approx, evd_branch_approx, mI_aug, rI_alpha_aug, condM,
 nPV = length(pv.s);
 
 % ------------------------------------------------------------
+% 1. Construct the common-voltage state Uc = [V1_c; 1Vc]
 % 1. 构造公共电压状态 Uc = [V1_c; 1Vc]
 % ------------------------------------------------------------
 
@@ -3007,6 +2502,7 @@ V1_c = -(YIp(1) * Vp + YII(1,2:end) * Vpv_c) / YII(1,1);
 Uc = [V1_c; Vpv_c];
 
 % ------------------------------------------------------------
+% 2. Identify the common-voltage branch alpha and the true branch alphaStar
 % 2. 判断公共电压分支 alpha 和真实分支 alphaStar
 % ------------------------------------------------------------
 
@@ -3016,6 +2512,7 @@ branchTrue = classify_all_branches(VItrue, pv, tripMask);
 branchMismatchCount = sum(branchCommon ~= branchTrue);
 
 % ------------------------------------------------------------
+% 3. Compute f_alpha(1Vc), f_alphaStar(1Vc), mI, and rI_alpha
 % 3. 计算 f_alpha(1Vc)、f_alphaStar(1Vc)、mI 和 rI_alpha
 % ------------------------------------------------------------
 
@@ -3029,6 +2526,7 @@ mI_aug = I_alpha_aug - I_alphastar_aug;
 rI_alpha_aug = YIp * Vp + YII * Uc - I_alpha_aug;
 
 % ------------------------------------------------------------
+% 4. Compute Jf_alpha(1Vc) and Jf_alphaStar(1Vc) separately
 % 4. 分别计算 Jf_alpha(1Vc) 和 Jf_alphaStar(1Vc)
 % ------------------------------------------------------------
 
@@ -3046,9 +2544,11 @@ MI_alphaStar_real = YII_real - J_alphaStar_real;
 condMIAlpha = cond(MI_alpha_real);
 condMIAlphaStar = cond(MI_alphaStar_real);
 
+% Keep the original variable condM, meaning cond(M_I^{alphaStar})
 % 保留原变量 condM，含义为 cond(M_I^{alphaStar})
 condM = condMIAlphaStar;
 
+% Original-side propagation operator in real two-axis coordinates
 % 实数二轴坐标下的原始侧传播算子
 % K_vd^alpha     = YpI(M_I^alpha)^(-1)
 % K_vd^alphaStar = YpI(M_I^alphaStar)^(-1)
@@ -3057,6 +2557,7 @@ KvdAlpha_real = YpI_real / MI_alpha_real;
 KvdAlphaStar_real = YpI_real / MI_alphaStar_real;
 
 % ------------------------------------------------------------
+% 5. Eq. (50) consistent-branch approximation
 % 5. 式（50）一致分支近似
 % ------------------------------------------------------------
 % evd_50 ≈ bcv + YpI * inv(M_I^alpha) * rI_alpha
@@ -3070,6 +2571,7 @@ delta50_complex = delta50_real(1:nInternal) + 1j*delta50_real(nInternal+1:end);
 evd_consistent_approx = bcv + YpI * delta50_complex;
 
 % ------------------------------------------------------------
+% 6. Eq. (53) inconsistent-branch approximation
 % 6. 式（53）不一致分支近似
 % ------------------------------------------------------------
 % evd_53 ≈ bcv + YpI * inv(M_I^alphaStar) * (rI_alpha + mI)
@@ -3086,6 +2588,7 @@ evd_branch_approx = bcv + YpI * delta53_complex;
 end
 
 %% ========================================================================
+% Approximate calculation of function-structure error using Eq. (60) and Eq. (63)
 %  函数结构误差式（60）和式（63）近似计算
 % ========================================================================
 
@@ -3100,6 +2603,7 @@ function [efs_consistent_approx, efs_func_approx, delta_ab, me_beta, condMe, ...
 nPV = length(pv.s);
 
 % ------------------------------------------------------------
+% 1. Compute G_alpha(Vc) = sum_i f_i(Vc)
 % 1. 计算 G_alpha(Vc) = sum_i f_i(Vc)
 % ------------------------------------------------------------
 
@@ -3111,6 +2615,7 @@ I_alpha_aug = forced_injection_aug(Uc_dummy, pv, branchCommon);
 G_alpha = sum(I_alpha_aug(2:end));
 
 % ------------------------------------------------------------
+% 2. Identify the equivalent common branch beta and equivalent true branch betaStar
 % 2. 识别等值公共分支 beta 和等值真实分支 betaStar
 % ------------------------------------------------------------
 
@@ -3123,6 +2628,7 @@ branchBetaStar = classify_equiv_branch(Ve, Vp, pv_eq, tripEq);
 eqBranchMismatch = double(branchBeta ~= branchBetaStar);
 
 % ------------------------------------------------------------
+% 3. Compute F_beta(Vc) and F_betaStar(Vc) at the same Vc
 % 3. 在同一个 Vc 下计算 F_beta(Vc) 和 F_betaStar(Vc)
 % ------------------------------------------------------------
 
@@ -3136,6 +2642,7 @@ delta_ab = G_alpha - F_beta_Vc;
 me_beta = F_beta_Vc - F_betaStar_Vc;
 
 % ------------------------------------------------------------
+% 4. Compute JF_beta(Vc) and JF_betaStar(Vc) separately
 % 4. 分别计算 JF_beta(Vc) 和 JF_betaStar(Vc)
 % ------------------------------------------------------------
 
@@ -3153,9 +2660,11 @@ Me_betaStar_real = Yee_real - JF_betaStar_real;
 condMeBeta = cond(Me_beta_real);
 condMeBetaStar = cond(Me_betaStar_real);
 
+% Keep the original variable condMe, meaning cond(M_e^{betaStar})
 % 保留原变量 condMe，含义为 cond(M_e^{betaStar})
 condMe = condMeBetaStar;
 
+% Equivalent-side propagation operator in real two-axis coordinates
 % 实数二轴坐标下的等值侧传播算子
 % K_fs^beta     = -Ype^eq(M_e^beta)^(-1)
 % K_fs^betaStar = -Ype^eq(M_e^betaStar)^(-1)
@@ -3164,6 +2673,7 @@ KfsBeta_real = -Yeq_pI_real / Me_beta_real;
 KfsBetaStar_real = -Yeq_pI_real / Me_betaStar_real;
 
 % ------------------------------------------------------------
+% 5. Eq. (60) consistent-branch approximation
 % 5. 式（60）一致分支近似
 % ------------------------------------------------------------
 % efs_60 ≈ -Yeq_pI * inv(M_e^beta) * delta_ab
@@ -3176,6 +2686,7 @@ deltaV60_complex = deltaV60_real(1) + 1j * deltaV60_real(2);
 efs_consistent_approx = -Yeq_pI * deltaV60_complex;
 
 % ------------------------------------------------------------
+% 6. Eq. (63) inconsistent-branch approximation
 % 6. 式（63）不一致分支近似
 % ------------------------------------------------------------
 % efs_63 ≈ -Yeq_pI * inv(M_e^betaStar) * (delta_ab + me_beta)
@@ -3191,6 +2702,7 @@ efs_func_approx = -Yeq_pI * deltaV63_complex;
 end
 
 %% ========================================================================
+% Identify the branch according to PV voltage and tripping state
 %  根据光伏电压和脱网状态识别分支
 % ========================================================================
 
@@ -3206,16 +2718,26 @@ end
 end
 
 %% ========================================================================
+% Single-PV branch identification
 %  单台光伏分支识别
 % ========================================================================
+% Branch index:
 % 分支编号：
+% 1: tripped
 % 1：脱网
+% 2: blocked
 % 2：封波
+% 3: normal constant-power, not current-limited
 % 3：正常恒功率，未限幅
+% 4: normal constant-power, current-limited
 % 4：正常恒功率，限幅
+% 5: LVRT constant-power, not current-limited
 % 5：低穿恒功率，未限幅
+% 6: LVRT constant-power, current-limited
 % 6：低穿恒功率，限幅
+% 7: LVRT constant-current, not current-limited
 % 7：低穿恒电流，未限幅
+% 8: LVRT constant-current, current-limited
 % 8：低穿恒电流，限幅
 
 function bid = classify_single_branch(V, s_k, type, k, pv, isTrip)
@@ -3263,6 +2785,7 @@ else
             u0 = [Id0; Iq0];
             baseID = 7;
         otherwise
+            % Unknown control type.
             error('未知控制类型。');
     end
 end
@@ -3278,16 +2801,26 @@ end
 end
 
 %% ========================================================================
+% English note: 等值PVbranch识别
 %  等值光伏分支识别
 % ========================================================================
+% Branch index:
 % 分支编号：
+% 1: tripped
 % 1：脱网
+% 2: blocked
 % 2：封波
+% 3: normal region, constant-power equivalent, not current-limited
 % 3：正常区，恒功率等值，未限幅
+% 4: normal region, constant-power equivalent, current-limited
 % 4：正常区，恒功率等值，限幅
+% 5: LVRT region, mixed constant-power and constant-current, neither current-limited
 % 5：低穿区，恒功率+恒电流混合，均未限幅
+% 6: LVRT region, constant-power current-limited and constant-current not current-limited
 % 6：低穿区，恒功率限幅，恒电流未限幅
+% 7: LVRT region, constant-power not current-limited and constant-current current-limited
 % 7：低穿区，恒功率未限幅，恒电流限幅
+% 8: LVRT region, both constant-power and constant-current are current-limited
 % 8：低穿区，恒功率和恒电流均限幅
 
 function branchID = classify_equiv_branch(V, Vp, pv_eq, isTrip)
@@ -3351,6 +2884,7 @@ end
 end
 
 %% ========================================================================
+% Node injection current under a fixed original-side branch
 %  固定原始侧分支下的节点注入电流
 % ========================================================================
 
@@ -3371,6 +2905,7 @@ Iinj_aug = [0; I_PV];
 end
 
 %% ========================================================================
+% Single-PV current under a fixed branch
 %  固定分支下的单台光伏电流
 % ========================================================================
 
@@ -3435,6 +2970,7 @@ switch branchID
         end
 
     otherwise
+        % Unknown branch index.
         error('未知分支编号。');
 
 end
@@ -3449,6 +2985,7 @@ I = I_local * eV;
 end
 
 %% ========================================================================
+% Equivalent PV current under a fixed equivalent-side branch
 %  固定等值侧分支下的等值光伏电流
 % ========================================================================
 
@@ -3504,6 +3041,7 @@ switch branchID
         u_mix = pv_eq.A * u_constP_lim + pv_eq.B * u_constI_lim;
 
     otherwise
+        % Unknown equivalent branch index.
         error('未知等值分支编号。');
 
 end
@@ -3518,6 +3056,7 @@ Ieq = I_local * eV;
 end
 
 %% ========================================================================
+% Numerical Jacobian of original-side injection current under a fixed branch
 %  固定分支原始侧注入电流数值雅可比
 % ========================================================================
 
@@ -3556,6 +3095,7 @@ end
 end
 
 %% ========================================================================
+% Numerical Jacobian of equivalent-side current under a fixed branch
 %  固定等值侧分支电流数值雅可比
 % ========================================================================
 
@@ -3593,6 +3133,7 @@ end
 end
 
 %% ========================================================================
+% Convert a complex matrix into a real two-axis matrix
 %  复数矩阵转换为实数二轴矩阵
 % ========================================================================
 
@@ -3606,6 +3147,7 @@ Ar = [
 end
 
 %% ========================================================================
+% PV control-logic voltage: RMS per-unit value
 %  光伏控制逻辑电压：RMS 标幺值
 % ========================================================================
 
@@ -3618,6 +3160,7 @@ v_pu = V_rms_kV / Vctrl_base_kV;
 end
 
 %% ========================================================================
+% Read thresholds according to control type
 %  按控制类型读取阈值
 % ========================================================================
 
@@ -3636,6 +3179,7 @@ switch type
         vblock = pv.constI.vblock;
 
     otherwise
+        % Unknown control type.
         error('未知控制类型。');
 
 end
@@ -3643,6 +3187,7 @@ end
 end
 
 %% ========================================================================
+% Current-limiting function
 %  电流限幅函数
 % ========================================================================
 
@@ -3679,6 +3224,7 @@ switch priority
 
     otherwise
 
+        % priority can only be equal, q_first, or p_first.
         error('priority 只能取 equal、q_first 或 p_first。');
 
 end
