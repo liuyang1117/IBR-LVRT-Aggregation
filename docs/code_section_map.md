@@ -46,7 +46,7 @@ Main characteristics:
 - controller voltage base: 10.0 kV
 - six PV units
 - capacity vector: `[2;4;2;4;2;2]` MW
-- control type vector: `[1;2;1;2;1;1]`
+- control type vector: `[1;1;1;2;2;2]`
 - current-limiting priority: `equal`
 
 ## Wind farm case / 风电场算例
