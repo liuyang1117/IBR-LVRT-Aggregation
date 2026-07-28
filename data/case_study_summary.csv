@@ -1,0 +1,6 @@
+﻿Case,Network_condition,IBR_heterogeneity,Aggregability_result,RMS_abs_e,RMS_abs_ecv,RMS_abs_eal,ecv_full_name,ecv_chinese_name,eal_full_name,eal_chinese_name,Source
+I-a,Common voltage,"Homogeneous, CP command",Exact aggregatable,3.86e-11,3.86e-11,6.95e-15,Common-Voltage-Reduction Error,同电压压缩误差,Admissible-Law-Approximation Error,允许函数类近似误差,Paper Table I
+I-b,Common voltage,"Mixed CP/CC, common thresholds",Exact aggregatable,1.71e-6,1.71e-6,3.08e-12,Common-Voltage-Reduction Error,同电压压缩误差,Admissible-Law-Approximation Error,允许函数类近似误差,Paper Table I
+II,Common voltage,"Mixed CP/CC, different thresholds",Admissible-Law-Approximation Error,4.09e-2,2.12e-6,4.09e-2,Common-Voltage-Reduction Error,同电压压缩误差,Admissible-Law-Approximation Error,允许函数类近似误差,Paper Table I
+III,Voltage dispersed,"Homogeneous, CP command",Common-Voltage-Reduction Error,1.72e-2,1.72e-2,9.93e-14,Common-Voltage-Reduction Error,同电压压缩误差,Admissible-Law-Approximation Error,允许函数类近似误差,Paper Table I
+IV,Realistic network,Two turbine types,Both ecv and eal errors,1.00e-1,1.12e-2,9.99e-2,Common-Voltage-Reduction Error,同电压压缩误差,Admissible-Law-Approximation Error,允许函数类近似误差,Paper Table I

@@ -1,0 +1,6 @@
+﻿Case,Device_group,Command_type,Imax_pu,voff_pu,Notes,Error_term_note,Chinese_error_term_note,Source
+I-a,All six PV units,CP,1.0,0.4,Homogeneous CP command,ecv/eal naming follows the updated repository terminology,ecv=同电压压缩误差；eal=允许函数类近似误差,Paper Table II
+I-b,All six PV units,Mixed CP/CC,1.0,0.4,Common threshold setting,ecv/eal naming follows the updated repository terminology,ecv=同电压压缩误差；eal=允许函数类近似误差,Paper Table II
+II,CP units,CP,1.0,0.4,Different thresholds between CP and CC groups; related error term: eal,ecv/eal naming follows the updated repository terminology,ecv=同电压压缩误差；eal=允许函数类近似误差,Paper Table II
+II,CC units,CC,1.1,0.3,Different thresholds between CP and CC groups; related error term: eal,ecv/eal naming follows the updated repository terminology,ecv=同电压压缩误差；eal=允许函数类近似误差,Paper Table II
+III,All six PV units,CP,1.0,0.4,Network with terminal-voltage dispersion; dominant error term: ecv,ecv/eal naming follows the updated repository terminology,ecv=同电压压缩误差；eal=允许函数类近似误差,Paper Table II

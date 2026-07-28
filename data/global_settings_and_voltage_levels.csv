@@ -1,0 +1,12 @@
+﻿Item,Value,Unit,Notes,Source
+Sbase,100,MVA,System power base used for all cases,Paper Section VI
+Vp_level_1,1.0,p.u.,PCC voltage sweep level,Paper Section VI
+Vp_level_2,0.8,p.u.,PCC voltage sweep level,Paper Section VI
+Vp_level_3,0.6,p.u.,PCC voltage sweep level,Paper Section VI
+Vp_level_4,0.5,p.u.,PCC voltage sweep level,Paper Section VI
+Vp_level_5,0.4,p.u.,PCC voltage sweep level,Paper Section VI
+Vp_level_6,0.3,p.u.,PCC voltage sweep level,Paper Section VI
+Vp_level_7,0.2,p.u.,PCC voltage sweep level,Paper Section VI
+Public_model_address,https://github.com/liuyang1117/LVRT-Aggregation,,Source code and simulation models,Paper Abstract and Section VI
+ecv_definition,Common-Voltage-Reduction Error,,Chinese name: 同电压压缩误差; used for the common-voltage-reduction error component,Repository terminology
+eal_definition,Admissible-Law-Approximation Error,,Chinese name: 允许函数类近似误差; used for the admissible-law-approximation error component,Repository terminology
