@@ -1,0 +1,6 @@
+Case,Network_condition,IBR_heterogeneity,Dominant_error_component,MATLAB_file,CloudPSS_model
+I-a,Common voltage,Homogeneous CP,Exact aggregation,matlab/photovoltaic_case.m,https://cloudpss.net/model/liuyang/CaseI-a
+I-b,Common voltage,Mixed CP/CC with common thresholds,Exact aggregation,matlab/photovoltaic_case.m,https://cloudpss.net/model/liuyang/CaseI-b
+II,Common voltage,Mixed CP/CC with different thresholds,eal,matlab/photovoltaic_case.m,https://cloudpss.net/model/liuyang/CaseII
+III,Voltage dispersed,Homogeneous control,ecv,matlab/photovoltaic_case.m,https://cloudpss.net/model/liuyang/CaseIII
+IV,Realistic collector network,Two turbine types,ecv and eal,matlab/wind_farm_case.m,https://cloudpss.net/model/liuyang/CaseIV

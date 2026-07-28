@@ -1,0 +1,12 @@
+Parameter,Value,Description
+Sbase_MVA,100,System power base
+Vbase_kV,10.5,Network voltage base
+Vctrl_base_kV,10.0,Controller voltage base
+s,[2;4;2;4;2;2],PV capacity vector in MW
+ctrlType,[1;1;1;2;2;2],"1=constant-power, 2=constant-current"
+Imax_CP,1.0,Current limit for type-1 constant-power units
+Imax_CC,1.1,Current limit for type-2 constant-current units
+vtrip_CP,0.40,Trip threshold for constant-power units
+vtrip_CC,0.30,Trip threshold for constant-current units
+Imax_eq,1.05,Equivalent current limit
+priority,q_first,Reactive-current-priority limiting

@@ -1,0 +1,3 @@
+MATLAB_file,Case,Capacity_vector,Control_type_vector,Main_parameters,Error_variable_names
+matlab/photovoltaic_case.m,PV benchmark / Case I-a to III,[2;4;2;4;2;2],[1;1;1;2;2;2],"CP: Imax=1.0,vtrip=0.4; CC: Imax=1.1,vtrip=0.3; q_first","ecv,eal"
+matlab/wind_farm_case.m,Wind farm / Case IV,[2;4;2;4;2;2;2;4;2;4;2;2],[1;2;1;2;1;1;1;2;1;2;1;1],"Type-A: kq=2.7,Imax=1.1; Type-B: kq=2.2,Imax=1.0; q_first","ecv,eal"

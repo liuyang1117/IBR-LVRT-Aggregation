@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+title: IBR-LVRT-Aggregation
+message: If you use this repository, please cite the associated paper or this repository.
+type: software
+authors:
+  - family-names: Liu
+    given-names: Yang
+repository-code: https://github.com/liuyang1117/LVRT-Aggregation
+license: MIT
